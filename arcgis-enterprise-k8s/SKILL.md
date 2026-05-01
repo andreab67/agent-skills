@@ -1,6 +1,6 @@
 ---
 name: arcgis-enterprise-k8s
-description: Deploy, configure, and operate ArcGIS Enterprise on Kubernetes — system requirements, deployment profiles (Development/Standard/Enhanced Availability), EKS/AKS/GKE/OpenShift support, persistent volume planning, load balancer configuration, TLS setup, upgrade procedures, and operational troubleshooting. Use when the user asks to deploy ArcGIS Enterprise on Kubernetes, size nodes for an ArcGIS deployment, configure storage classes or load balancers for ArcGIS, upgrade ArcGIS Enterprise on Kubernetes, or diagnose pod failures in an ArcGIS cluster.
+description: Deploy, configure, and operate ArcGIS Enterprise on Kubernetes — system requirements, deployment profiles (Development/Standard/Enhanced Availability), EKS/AKS/GKE/OpenShift support, persistent volume planning, load balancer configuration, TLS setup, upgrade procedures, and operational troubleshooting. Use this skill whenever the user mentions ArcGIS Enterprise on Kubernetes, ArcGIS K8s deployment, Esri Enterprise K8s sizing, ArcGIS PVC planning, ArcGIS upgrade, or diagnosing pod failures in an ArcGIS namespace — even if they just say "deploy ArcGIS" or "ArcGIS on EKS" without further detail.
 ---
 
 # arcgis-enterprise-k8s
@@ -107,7 +107,7 @@ nslookup arcgis.agency.gov
 | L4 (TCP passthrough) | NLB | Azure Load Balancer | TCP LB | MetalLB |
 | L7 (TLS termination) | ALB | Application Gateway | HTTP LB | NGINX/Traefik |
 
-Login.gov recommends L4 for simplicity — TLS termination handled by ArcGIS pods.
+Esri recommends L4 (TCP passthrough) for simplicity — TLS termination is handled by ArcGIS pods directly.
 
 ### IP capacity planning
 
@@ -246,3 +246,19 @@ done
 - System requirements: `https://enterprise-k8s.arcgis.com/en/latest/deploy/system-requirements.htm`
 - My Esri (downloads/license): `https://my.esri.com`
 - Community: `https://community.esri.com/t5/arcgis-enterprise-on-kubernetes`
+
+## Example prompts
+
+- *"How many nodes do I need for ArcGIS Enterprise on Kubernetes in production HA mode?"*
+- *"What storage class should I use for ArcGIS PVCs on EKS?"*
+- *"One of my ArcGIS pods is in CrashLoopBackOff. How do I diagnose it?"*
+- *"Can I change the FQDN after ArcGIS Enterprise Kubernetes is deployed?"*
+- *"Walk me through upgrading ArcGIS Enterprise Kubernetes to the latest version."*
+- *"How many IP addresses do I need to reserve in my VPC subnet for an ArcGIS deployment?"*
+- *"Show me a StorageClass manifest for ArcGIS on EKS using gp3."*
+
+## Related skills
+
+- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — general Kubernetes deployment patterns and failure diagnosis
+- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS hardening for self-managed worker nodes
+- [`login-gov`](./login-gov/SKILL.md) — federal identity integration if fronting ArcGIS with login.gov

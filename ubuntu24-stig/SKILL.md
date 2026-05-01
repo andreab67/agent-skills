@@ -1,6 +1,6 @@
 ---
 name: ubuntu24-stig
-description: Apply and audit DISA STIG V1R1 for Ubuntu 24.04 LTS on AWS EC2 — OpenSCAP scanning with the correct benchmark IDs, idempotent shell remediation for MAC-2_Sensitive/Public profiles, auditd rule generation, SSH FIPS 140-3 hardening, PAM lockout and pwquality, AIDE integrity monitoring, and AWS-specific skip logic. Use when the user asks to harden an Ubuntu 24.04 server to STIG, run a SCAP compliance scan, fix a failing STIG rule, generate audit rules, or produce a compliance report.
+description: Apply and audit DISA STIG V1R1 for Ubuntu 24.04 LTS on AWS EC2 — OpenSCAP scanning with the correct benchmark IDs, idempotent shell remediation for MAC-2_Sensitive/Public profiles, auditd rule generation, SSH FIPS 140-3 hardening, PAM lockout and pwquality, AIDE integrity monitoring, and AWS-specific skip logic. Use this skill whenever the user mentions Ubuntu 24.04 STIG hardening, OpenSCAP, SCAP scanning, DISA compliance, auditd rules, FIPS 140-3 on SSH, PAM lockout, AIDE, or any specific STIG rule ID (SV-270xxx) — even if they just say "harden this server" or "failed a compliance scan" in an Ubuntu 24.04 context.
 ---
 
 # ubuntu24-stig
@@ -288,3 +288,18 @@ The remediation script generates the full `/etc/audit/rules.d/99-stig.rules`. Ke
 -a always,exit -F path=/usr/bin/su    -F perm=x -k privileged
 -a always,exit -F path=/bin/mount     -F perm=x -k privileged
 ```
+
+## Example prompts
+
+- *"How do I run an OpenSCAP SCAP scan on Ubuntu 24.04 with the DISA STIG benchmark?"*
+- *"My scan fails with `Failed to locate a datastream`. What's the correct benchmark ID?"*
+- *"STIG rule SV-270690 failed — how do I configure PAM lockout after 3 failed attempts?"*
+- *"Which STIG rules should I skip on an AWS EC2 headless instance?"*
+- *"Show me how to configure SSH FIPS 140-3 ciphers for Ubuntu 24.04."*
+- *"Walk me through setting up AIDE integrity monitoring with a daily cron check."*
+- *"I need to pass a DISA STIG audit next week for our EC2 fleet. What do I run first?"*
+
+## Related skills
+
+- [`postgres-ops`](./postgres-ops/SKILL.md) — STIG hardening for the PostgreSQL layer on this server
+- [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) — OS hardening context for ArcGIS worker nodes

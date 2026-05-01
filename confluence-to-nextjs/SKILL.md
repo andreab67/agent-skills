@@ -1,6 +1,6 @@
 ---
 name: confluence-to-nextjs
-description: Convert Atlassian Confluence pages to native Next.js App Router pages — fetch content via Confluence REST API v2, parse storage-format HTML into semantic JSX, build a knowledge base with table of contents, anchor navigation, and matching design system. Use when the user wants to replace Confluence-hosted documentation with a self-hosted Next.js site, migrate knowledge base articles, or port any Confluence page to a branded Next.js page.
+description: Convert Atlassian Confluence pages to native Next.js App Router pages — fetch content via Confluence REST API v2, parse storage-format HTML into semantic JSX, build a knowledge base with table of contents, anchor navigation, and matching design system. Use this skill whenever the user mentions Confluence migration, converting Confluence docs to Next.js, building a KB site from Confluence content, or replacing Atlassian-hosted pages with a self-hosted knowledge base — even if they just say "move our docs off Confluence" or "build a KB app".
 ---
 
 # confluence-to-nextjs
@@ -196,3 +196,17 @@ it("renders standard support anchor", () => {
 ```
 
 When a heading appears at multiple levels (h2 + h3 with similar text), use `{ level: 2 }` in the query to avoid `Found multiple elements` errors.
+
+## Example prompts
+
+- *"I want to replace our Confluence KB with a self-hosted Next.js site. Where do I start?"*
+- *"How do I fetch a Confluence page's content via the REST API?"*
+- *"Show me how to convert a Confluence `<ac:structured-macro name='info'>` callout to JSX."*
+- *"Generate the TableOfContents component with IntersectionObserver for active-section tracking."*
+- *"Write a Vitest test for the support-maintenance KB page checking anchor IDs."*
+- *"How do I replace Confluence URLs across the product site with internal KB routes?"*
+
+## Related skills
+
+- [`nextjs-monorepo-ci`](./nextjs-monorepo-ci/SKILL.md) — add the `apps/kb` Next.js app to the CI pipeline
+- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — deploy the KB app to Kubernetes

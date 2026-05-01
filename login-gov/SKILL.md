@@ -1,6 +1,6 @@
 ---
 name: login-gov
-description: Integrate with login.gov as a federal identity provider — OIDC and SAML federation, private_key_jwt client authentication, ACR value selection (auth-only, verified, facial-match, PIV/CAC), sandbox and production setup, token flow implementation, user attribute scopes, and Partner Portal configuration. Use when the user asks to integrate an application with login.gov, implement federal SSO, configure OIDC for a government application, handle identity proofing levels, or debug login.gov authentication errors.
+description: Integrate with login.gov as a federal identity provider — OIDC and SAML federation, private_key_jwt client authentication, ACR value selection (auth-only, verified, facial-match, PIV/CAC), sandbox and production setup, token flow implementation, user attribute scopes, and Partner Portal configuration. Use this skill whenever the user mentions login.gov, federal SSO, private_key_jwt, IAL2, ACR values, identity proofing, PIV/CAC authentication, the login.gov Partner Portal, or any error from the login.gov IdP — even if they just say "integrate with login.gov" or "federal identity" without more detail.
 ---
 
 # login-gov
@@ -238,3 +238,18 @@ Response attributes depend on scopes requested:
 | `invalid_scope` | Scope not allowed for ACR level | Use `urn:acr.login.gov:verified` for identity attributes |
 | id_token nonce mismatch | Nonce not stored/retrieved correctly | Store nonce in server-side session before redirect |
 | `exp` claim rejected | client_assertion JWT older than 5 min | Always generate assertion fresh per token request |
+
+## Example prompts
+
+- *"How do I integrate our agency web app with login.gov for federal SSO?"*
+- *"Generate the `private_key_jwt` client assertion JWT for the token exchange."*
+- *"What ACR value do I use if I need identity verification but not facial recognition?"*
+- *"My token request returns `invalid_client`. What could cause that?"*
+- *"How do I request the user's SSN and address attributes after they authenticate?"*
+- *"Walk me through setting up the login.gov sandbox — discovery URL, test users, IAL2 bypass."*
+- *"What's the production deployment checklist before we go live with login.gov?"*
+
+## Related skills
+
+- [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) — if fronting ArcGIS with federal identity via login.gov
+- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS hardening for the server running the integration

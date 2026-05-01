@@ -1,6 +1,6 @@
 ---
 name: k8s-nextjs-deploy
-description: Kubernetes deployment patterns for Next.js applications — Deployment/Service/Ingress manifests, Harbor image pull secrets, Traefik ingress with cert-manager TLS, Linkerd service mesh, multi-app namespaces, and K8s secret rotation. Use when the user asks to deploy a new Next.js app to Kubernetes, fix ImagePullBackOff or CrashLoopBackOff errors, rotate Harbor credentials, add a new subdomain to the ingress, or apply namespace manifests after a rebuild.
+description: Kubernetes deployment patterns for Next.js applications — Deployment/Service/Ingress manifests, Harbor image pull secrets, Traefik ingress with cert-manager TLS, Linkerd service mesh, multi-app namespaces, and K8s secret rotation. Use this skill whenever the user mentions deploying a Next.js app to Kubernetes, ImagePullBackOff, CrashLoopBackOff, Harbor pull secret, Traefik ingress, cert-manager, a missing secretKeyRef, or namespace recovery — even if they just say "the pod won't start" or "deploy this to k8s" without further detail.
 ---
 
 # k8s-nextjs-deploy
@@ -215,3 +215,17 @@ kubectl config current-context      # verify
 ```
 
 Always verify context before applying manifests or rotating secrets.
+
+## Example prompts
+
+- *"Our pods are stuck in `ImagePullBackOff`. How do I diagnose and fix this?"*
+- *"I rotated the Harbor robot account token. How do I update the pull secret without downtime?"*
+- *"Add subdomain `kb.example.com` to the existing Traefik ingress."*
+- *"The namespace got accidentally deleted. Walk me through restoring everything in order."*
+- *"A pod is in `CreateContainerConfigError`. What does that mean and how do I fix it?"*
+- *"Show me a production-ready Next.js Deployment manifest with resource limits and probes."*
+
+## Related skills
+
+- [`nextjs-monorepo-ci`](./nextjs-monorepo-ci/SKILL.md) — CI pipeline that builds and pushes the images this skill deploys
+- [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) — deploying a more complex stateful app on Kubernetes

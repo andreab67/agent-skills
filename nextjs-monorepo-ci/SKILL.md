@@ -1,6 +1,6 @@
 ---
 name: nextjs-monorepo-ci
-description: Design, fix, and extend GitLab CI/CD pipelines for Next.js monorepos — multi-stage pipelines (validate, security, build, obfuscate, package, notify), Kaniko image builds, Semgrep SAST/secrets, gitleaks, javascript-obfuscator standalone output, Harbor registry, and IndexNow notify stage. Use when the user asks to add a CI stage, fix a failing job, add a new app to the pipeline, tune obfuscation settings, or debug Docker/Kaniko build failures in a Next.js monorepo.
+description: Design, fix, and extend GitLab CI/CD pipelines for Next.js monorepos — multi-stage pipelines (validate, security, build, obfuscate, package, notify), Kaniko image builds, Semgrep SAST/secrets, gitleaks, javascript-obfuscator standalone output, Harbor registry, and IndexNow notify stage. Use this skill whenever the user mentions GitLab CI, a failing CI job, gitleaks, Kaniko, javascript-obfuscator, Harbor push, or any pipeline work in a Next.js monorepo — even if they just say "CI is broken" or "add a new app to the pipeline" without more detail.
 ---
 
 # nextjs-monorepo-ci
@@ -214,3 +214,17 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 | `ChunkLoadError: _0x… is not a function` | Obfuscator mangled Turbopack runtime chunks | Exclude `*[turbopack]*` and `*[externals]*` from find |
 | `npm ci` fails: no lockfile | New app scaffolded but `npm install` never run | Run `npm install` locally first, commit `package-lock.json` |
 | gitleaks blocks on IndexNow key | 32-char hex looks like generic API key | Add regex allowlist to `.gitleaks.toml` |
+
+## Example prompts
+
+- *"My CI is failing with `cp: cannot stat 'apps/web/.next'`. What's the fix?"*
+- *"How do I add the new `apps/kb` app to the existing six-stage pipeline?"*
+- *"gitleaks is blocking on an IndexNow key — how do I add it to the allowlist?"*
+- *"The app crashes with `ChunkLoadError: _0x… is not a function` after obfuscation. What's happening?"*
+- *"Show me how to configure Kaniko to push to our Harbor registry."*
+- *"I want to add Semgrep SAST scanning to our validate stage."*
+
+## Related skills
+
+- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — deploy the Docker images built by this pipeline
+- [`confluence-to-nextjs`](./confluence-to-nextjs/SKILL.md) — when adding a `kb` app to the monorepo

@@ -1,6 +1,6 @@
 ---
 name: postgres-ops
-description: Operational PostgreSQL workflows for production environments — diagnosing slow queries, lock contention, bloat, replication lag, and connection-pool exhaustion; designing and reviewing backups (pg_dump, pg_basebackup, PITR via WAL archiving); planning upgrades and major-version migrations; configuring pgBouncer/RDS Proxy/PgCat; tuning postgresql.conf for OLTP and analytics workloads; writing and reviewing schema migrations across EF Core, Alembic, Flyway, and raw SQL; setting up observability with postgres_exporter to Prometheus, log shipping to Loki, and slow-query alerting; hardening for DoD/federal use (STIG, role separation, RLS, pgaudit, TLS). Use when the user asks to diagnose a Postgres incident, review a query plan or EXPLAIN output, plan a migration or upgrade, design HA/DR, audit security posture, tune performance, or build a runbook. Do NOT use for greenfield CRUD scaffolding — use nextjs-react-postgres-builder for that.
+description: Operational PostgreSQL workflows for production environments — diagnosing slow queries, lock contention, bloat, replication lag, and connection-pool exhaustion; designing and reviewing backups (pg_dump, pg_basebackup, PITR via WAL archiving); planning upgrades and major-version migrations; configuring pgBouncer/RDS Proxy/PgCat; tuning postgresql.conf for OLTP and analytics workloads; writing and reviewing schema migrations across EF Core, Alembic, Flyway, and raw SQL; setting up observability with postgres_exporter to Prometheus, log shipping to Loki, and slow-query alerting; hardening for DoD/federal use (STIG, role separation, RLS, pgaudit, TLS). Use this skill whenever the user mentions Postgres, PostgreSQL, pg_, EXPLAIN ANALYZE, autovacuum, pgBouncer, replication lag, schema migrations, or anything involving a Postgres incident, performance problem, upgrade, backup, or compliance audit — even if they don't say "Postgres" explicitly but the context is clearly a relational database on PostgreSQL. Do NOT use for greenfield CRUD scaffolding — use nextjs-react-postgres-builder for that.
 ---
 
 # postgres-ops
@@ -120,3 +120,18 @@ For pgBouncer in transaction-pooling mode:
 - Call out destructive operations explicitly (`DROP`, `TRUNCATE`, `pg_upgrade --link`, `vacuum full`).
 - For any tuning parameter recommendation, state the workload assumption (OLTP / analytics / mixed) and the math behind it.
 - When uncertain about a version-specific behavior, say so and name the version where the behavior changed.
+
+## Example prompts
+
+- *"We have a query taking 30 seconds in prod. Here's the EXPLAIN ANALYZE — what's wrong?"*
+- *"Our app hit max_connections. Walk me through diagnosing the cause and fixing it without downtime."*
+- *"I need to add a NOT NULL column to a 200M-row table. What's the zero-downtime approach?"*
+- *"We're upgrading from Postgres 14 to 16. What's the fastest path and what should I check first?"*
+- *"Help me size pgBouncer pool for 50 app instances hitting a single primary."*
+- *"Our DISA STIG audit is next week. What Postgres controls do I need in place?"*
+- *"Autovacuum is running constantly on one table. How do I tune it?"*
+
+## Related skills
+
+- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — Kubernetes deployment patterns if Postgres runs in-cluster
+- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS-level STIG hardening for the host running Postgres

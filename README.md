@@ -1,6 +1,10 @@
 # agent-skills
 
+[![Browse on skills.sh](https://img.shields.io/badge/skills.sh-andreab67%2Fagent--skills-blue)](https://skills.sh/andreab67/agent-skills)
+
 Personal collection of [agent skills](https://skills.sh/) for use with Claude Code and other LLM agents. Each skill is a reusable instruction set that primes the agent with domain knowledge, workflow patterns, and failure playbooks — so you don't have to re-explain the same context every session.
+
+**Catalog:** <https://skills.sh/andreab67/agent-skills>
 
 ## Skills
 
@@ -25,6 +29,9 @@ npx skills add andreab67/agent-skills@postgres-ops -g -y
 npx skills add andreab67/agent-skills@nextjs-monorepo-ci -g -y
 npx skills add andreab67/agent-skills@k8s-nextjs-deploy -g -y
 npx skills add andreab67/agent-skills@confluence-to-nextjs -g -y
+npx skills add andreab67/agent-skills@ubuntu24-stig -g -y
+npx skills add andreab67/agent-skills@login-gov -g -y
+npx skills add andreab67/agent-skills@arcgis-enterprise-k8s -g -y
 npx skills add andreab67/agent-skills@loki-best-practices -g -y
 npx skills add andreab67/agent-skills@session-handoff -g -y
 ```

@@ -1,5 +1,7 @@
 # ubuntu24-stig
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-ubuntu24--stig-blue)](https://skills.sh/andreab67/agent-skills/ubuntu24-stig)
+
 DISA STIG V1R1 hardening skill for Ubuntu 24.04 LTS on AWS EC2. Knows the exact OpenSCAP benchmark IDs, the AWS-specific skip list, and carries an idempotent remediation script for the MAC-2_Sensitive profile.
 
 ## Install

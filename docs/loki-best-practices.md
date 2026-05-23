@@ -1,5 +1,7 @@
 # loki-best-practices
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-loki--best--practices-blue)](https://skills.sh/andreab67/agent-skills/loki-best-practices)
+
 Production-grade Grafana Loki operations skill. Primes Claude with the SRE mindset, diagnostic commands, and playbooks needed to work effectively on live Loki clusters.
 
 ## Install

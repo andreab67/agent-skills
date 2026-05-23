@@ -1,5 +1,7 @@
 # postgres-ops
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-postgres--ops-blue)](https://skills.sh/andreab67/agent-skills/postgres-ops)
+
 Production-grade PostgreSQL operations skill. Primes Claude with the SRE mindset, diagnostic queries, and playbooks needed to work effectively on live Postgres systems.
 
 ## Install

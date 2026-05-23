@@ -1,5 +1,7 @@
 # session-handoff
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-session--handoff-blue)](https://skills.sh/andreab67/agent-skills/session-handoff)
+
 Rescue critical session context to persistent memory before `/clear`, `/compact`, or any conversation wipe. Invoked manually before ending a session; an optional hook can also gate `/clear` itself.
 
 ## Install

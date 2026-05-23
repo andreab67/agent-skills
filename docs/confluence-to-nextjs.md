@@ -1,5 +1,7 @@
 # confluence-to-nextjs
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-confluence--to--nextjs-blue)](https://skills.sh/andreab67/agent-skills/confluence-to-nextjs)
+
 Migrates Atlassian Confluence pages to a self-hosted Next.js knowledge base. Knows the Confluence REST API v2 storage format, the JSX conversion rules, and the component patterns needed to produce a polished, navigable KB site.
 
 ## Install

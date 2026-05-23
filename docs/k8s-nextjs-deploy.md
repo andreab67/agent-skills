@@ -1,5 +1,7 @@
 # k8s-nextjs-deploy
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-k8s--nextjs--deploy-blue)](https://skills.sh/andreab67/agent-skills/k8s-nextjs-deploy)
+
 Kubernetes deployment skill for containerized Next.js applications. Covers the full manifest set, Harbor registry authentication, Traefik ingress with automatic TLS, and practical failure diagnosis.
 
 ## Install

@@ -1,5 +1,7 @@
 # login-gov
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-login--gov-blue)](https://skills.sh/andreab67/agent-skills/login-gov)
+
 Federal identity provider integration skill for login.gov. Knows the OIDC authorization code flow, `private_key_jwt` client authentication, ACR/AAL value selection, and the Partner Portal setup process for both sandbox and production.
 
 ## Install

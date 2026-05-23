@@ -1,5 +1,7 @@
 # nextjs-monorepo-ci
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-nextjs--monorepo--ci-blue)](https://skills.sh/andreab67/agent-skills/nextjs-monorepo-ci)
+
 GitLab CI/CD pipeline skill for Next.js monorepos. Knows the six-stage pipeline structure, its failure patterns, and the specific quirks of obfuscating standalone Next.js output and building with Kaniko.
 
 ## Install

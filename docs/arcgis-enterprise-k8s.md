@@ -1,5 +1,7 @@
 # arcgis-enterprise-k8s
 
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-arcgis--enterprise--k8s-blue)](https://skills.sh/andreab67/agent-skills/arcgis-enterprise-k8s)
+
 ArcGIS Enterprise on Kubernetes skill (version 12.0). Covers deployment profiles, node sizing, persistent volume planning, load balancer selection, TLS requirements, upgrade procedures, and pod failure diagnosis.
 
 ## Install

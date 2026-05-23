@@ -14,6 +14,7 @@ Personal collection of [agent skills](https://skills.sh/) for use with Claude Co
 | [`login-gov`](./login-gov/SKILL.md) | [docs](./docs/login-gov.md) | Integrate applications with login.gov federal identity provider: OIDC authorization code flow, private_key_jwt client authentication, ACR value selection (auth-only, IAL2, facial-match, PIV/CAC), user attribute scopes, sandbox setup, token validation, and Partner Portal configuration. |
 | [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) | [docs](./docs/arcgis-enterprise-k8s.md) | Deploy and operate ArcGIS Enterprise on Kubernetes 12.0: deployment profiles (Dev/Standard/Enhanced HA), EKS/AKS/GKE/OpenShift sizing, persistent volume planning, L4/L7 load balancer configuration, TLS requirements, upgrade procedures, and pod failure diagnosis. |
 | [`loki-best-practices`](./loki-best-practices/SKILL.md) | [docs](./docs/loki-best-practices.md) | Production Grafana Loki operations: reason-keyed ingest-discard triage (`rate_limited`, `stream_limit`, `out_of_order`, `invalid_labels`), WAL replay and chunk-flush recovery, Helm deployment-mode and schema-period pitfalls, OTel/Promtail/Alloy push debugging, query-performance tuning (`max_outstanding_requests`, cardinality, regex rewrites), S3/IRSA and compactor retention, ring health and HA rolling upgrades, and the seven alerts every Loki cluster should have. |
+| [`session-handoff`](./session-handoff/SKILL.md) | [docs](./docs/session-handoff.md) | Rescue critical session context to persistent auto-memory before `/clear`, `/compact`, or any conversation wipe. One-sentence rescue test (*would re-reading the repo recover this?*), six categories mapped to `user`/`feedback`/`project`/`reference`, hard exclusions for secrets and code-derivable facts, consistent slug-prefix tagging for retrieval, review-before-write via `AskUserQuestion`, conflict resolution against stale entries, anti-patterns gallery, and a worked end-to-end example. Optional `UserPromptSubmit` hook intercepts `/clear` for true auto-activation. |
 
 ## Install
 
@@ -25,12 +26,13 @@ npx skills add andreab67/agent-skills@nextjs-monorepo-ci -g -y
 npx skills add andreab67/agent-skills@k8s-nextjs-deploy -g -y
 npx skills add andreab67/agent-skills@confluence-to-nextjs -g -y
 npx skills add andreab67/agent-skills@loki-best-practices -g -y
+npx skills add andreab67/agent-skills@session-handoff -g -y
 ```
 
 Or install all skills at once:
 
 ```bash
-for skill in postgres-ops nextjs-monorepo-ci k8s-nextjs-deploy confluence-to-nextjs ubuntu24-stig login-gov arcgis-enterprise-k8s loki-best-practices; do
+for skill in postgres-ops nextjs-monorepo-ci k8s-nextjs-deploy confluence-to-nextjs ubuntu24-stig login-gov arcgis-enterprise-k8s loki-best-practices session-handoff; do
   npx skills add andreab67/agent-skills@$skill -g -y
 done
 ```

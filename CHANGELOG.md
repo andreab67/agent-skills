@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2 — 2026-05-25
+
+Three new provider SDK skills covering the major AI API surfaces.
+
+- **`anthropic-sdk`** — Anthropic Python SDK: Messages API, streaming, tool use loop, `count_tokens()`, prompt caching (`cache_control: ephemeral`), vision, Opus 4.7 / Sonnet 4.6 / Haiku 4.5 pricing table, cost estimation helper.
+- **`openai-sdk`** — OpenAI Python SDK: chat completions, streaming, function calling with tool_call loop, JSON structured output, embeddings, tiktoken `count_message_tokens()`, GPT-4o/mini/o1/o3 pricing table, cost estimation helper.
+- **`kilo-gateway`** — Kilo.ai unified gateway: OpenAI-compatible API at `https://api.kilo.ai/api/gateway`, BYOK zero-markup routing, `provider/model-name` format, Python/TypeScript/cURL/LangChain patterns, prompt-cache `X-KiloCode-TaskId` header, `:free` model suffix.
+
 ## v1.1.1 — 2026-05-23
 
 Discoverability pass. No skill content changes.

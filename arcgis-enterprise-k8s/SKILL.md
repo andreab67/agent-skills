@@ -247,6 +247,18 @@ done
 - My Esri (downloads/license): `https://my.esri.com`
 - Community: `https://community.esri.com/t5/arcgis-enterprise-on-kubernetes`
 
+## Anti-patterns
+
+These all look reasonable for a Kubernetes ArcGIS deployment but will cause silent failures or unsupported states:
+
+1. **Using `kubectl scale` to adjust ArcGIS service replicas** — ArcGIS Enterprise K8s manages its own service scaling through the Manager UI or REST admin API; direct `kubectl scale deployment` bypasses Esri's internal state machine and will be overwritten or cause pod reconciliation conflicts.
+2. **Changing the FQDN after deployment** — the FQDN is baked into the ArcGIS license, TLS certificates, the internal web adaptor config, and the portal's site URL. There is no supported rename operation; changing FQDN post-deployment requires a full redeploy. Confirm the FQDN before running `arcgis-enterprise-k8s.sh deploy`.
+3. **Using `standard` storage class instead of `gp3`/`premium` for production PVCs** — `standard` disks have iops caps that cause spatiotemporal big data store and relational data store I/O to fall below ArcGIS minimum requirements under load. Always use provisioned IOPS storage (EKS: `gp3`, AKS: `managed-premium`) for any ArcGIS PVC.
+4. **Deleting the `arcgis` namespace to "reset" a failed deployment** — deleting the namespace does not clean up CRDs, ClusterRoles, or PVs with `Retain` reclaim policy. A subsequent fresh deploy will inherit stale CRD state and PVs, causing the new deployment to re-bind to old data or fail at the CRD install step.
+5. **Skipping PVC snapshot before an upgrade** — the `arcgis-enterprise-k8s.sh upgrade` script performs a rolling restart but does not back up data stores. If the upgrade fails mid-flight (e.g., spatiotemporal store schema mismatch), recovery requires restoring from a PV snapshot. Always snapshot every PVC before initiating an upgrade.
+6. **Mixing L4 and L7 load balancer approaches** — ArcGIS Enterprise K8s supports either a LoadBalancer service (L4) or an Ingress controller (L7) for the web adaptor, but not both simultaneously. Configuring an Ingress in front of a LoadBalancer type service causes double-NAT and breaks the `Referer` header validation ArcGIS requires for security.
+7. **Assuming the initial admin password is permanent** — the `arcgis-initial-admin` secret is a one-time bootstrap credential. After first login, change the admin password in the Manager UI and rotate the Kubernetes secret; the initial value is treated as publicly known by Esri's deployment model.
+
 ## Example prompts
 
 - *"How many nodes do I need for ArcGIS Enterprise on Kubernetes in production HA mode?"*

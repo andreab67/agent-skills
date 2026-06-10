@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.3 — 2026-06-09
+
+Quality pass across all 12 skills — every skill now meets the full quality bar.
+
+### New sections in all skills
+
+- **Anti-patterns gallery** (5–7 items per skill): things that look in-scope but silently fail, break production, or waste money — with explicit refusal phrasing. Added to all skills that were missing it: `postgres-ops`, `confluence-to-nextjs`, `ubuntu24-stig`, `arcgis-enterprise-k8s`.
+- **Pre-flight checklist** (SDK skills): ordered verification steps to run before writing any API code — added to `anthropic-sdk`, `openai-sdk`, `kilo-gateway`.
+- **Worked end-to-end examples** (SDK skills): complete runnable code with a triage decision table showing keep/continue/done paths — added to `anthropic-sdk`, `openai-sdk`, `kilo-gateway`.
+
+### Model updates in `anthropic-sdk`
+
+- Updated `claude-opus-4-7` → **`claude-opus-4-8`** (current Opus model)
+- Added **`claude-fable-5`** to the model selection table (best for autonomous agentic workflows)
+- Updated cost estimation helper to reflect current pricing
+
 ## v1.2 — 2026-05-25
 
 Three new provider SDK skills covering the major AI API surfaces.

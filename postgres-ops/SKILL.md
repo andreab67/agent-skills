@@ -121,6 +121,18 @@ For pgBouncer in transaction-pooling mode:
 - For any tuning parameter recommendation, state the workload assumption (OLTP / analytics / mixed) and the math behind it.
 - When uncertain about a version-specific behavior, say so and name the version where the behavior changed.
 
+## Anti-patterns
+
+These look like reasonable Postgres moves but will either corrupt data, cause silent failures, or surprise you in production:
+
+1. **Running `VACUUM FULL` on a live high-traffic table** — `VACUUM FULL` acquires an exclusive lock that blocks all reads and writes for the duration. On large tables this means minutes of downtime. Use regular `VACUUM` (autovacuum) for routine bloat; `VACUUM FULL` only on an offline table or during a maintenance window.
+2. **Using `UPDATE-Database` in EF Core directly against production** — EF Core's migration runner will execute DDL without the ability to inspect SQL first, and there is no dry-run mode. Always generate a SQL script with `Script-Migration`, review it, then apply through a controlled change window.
+3. **Setting `work_mem` globally high** — `work_mem` is per sort operation per query, and a single complex query can trigger many operations simultaneously. Setting `work_mem = 1GB` on a 64 GB server with 100 connections doing complex sorts will OOM the host. Set it low globally and override per session for known heavy queries.
+4. **Trusting `pg_dump` without a restore test** — `pg_dump` completing successfully does not mean the backup is usable. Schema dumps with extension version mismatches or missing roles fail silently on restore. Test a full restore to a separate instance on a schedule — not right before you need it.
+5. **Using `transaction` pooling mode in pgBouncer with prepared statements** — prepared statements are session-scoped; in transaction pooling the server-side connection changes between transactions, so `PREPARE`/`EXECUTE` will reference a statement that no longer exists. Either use `session` pooling or move to `DEALLOCATE ALL` patterns on every transaction.
+6. **Skipping the `--link` caveat with `pg_upgrade`** — `pg_upgrade --link` creates hard links rather than copying data files, making the upgrade fast. But if the old cluster is accessed or the upgrade is rolled back after the new cluster has written to the linked files, data corruption results. Backup before `--link` and never start the old cluster again after the new one has written data.
+7. **Adding an index without `CONCURRENTLY` on a production table** — standard `CREATE INDEX` holds a `ShareLock` that blocks writes for the index build duration. `CREATE INDEX CONCURRENTLY` avoids the lock but takes longer and cannot run inside a transaction block.
+
 ## Example prompts
 
 - *"We have a query taking 30 seconds in prod. Here's the EXPLAIN ANALYZE — what's wrong?"*

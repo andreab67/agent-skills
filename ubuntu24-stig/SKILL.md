@@ -289,6 +289,18 @@ The remediation script generates the full `/etc/audit/rules.d/99-stig.rules`. Ke
 -a always,exit -F path=/bin/mount     -F perm=x -k privileged
 ```
 
+## Anti-patterns
+
+These look like valid hardening moves but will break your instance or produce false-clean scans:
+
+1. **Enabling FIPS mode on a running production EC2 instance without a snapshot** — `ubuntu-advantage-tools` FIPS enablement reboots the kernel with FIPS-validated modules. On AWS, if the instance's kernel or init system has dependencies that are absent in FIPS mode, the instance will not come back up. Always snapshot before enabling, and test on a non-production instance first.
+2. **Using the `U_CAN_Ubuntu_24-04_LTS_V1R1` benchmark ID without the full `_SCAP_1-3_` path** — the SCAP content inside the zip contains multiple component files; passing just the outer zip filename or a truncated path causes `--datastream-id` lookups to fail silently with a generic `Failed to locate a datastream` error rather than a helpful message.
+3. **Running OpenSCAP scan results as the root pass/fail truth without reviewing `notapplicable` rules** — by default OpenSCAP counts `notapplicable` rules as neutral. On a headless AWS EC2, rules about GUI, removable media, and physical console will all be `notapplicable` — your real posture score is among `fail` rules only. Filter the report accordingly.
+4. **Applying `chmod 0750 /usr/bin/journalctl` before confirming no monitoring agents use it as a non-root user** — this blocks any non-root service (Prometheus node_exporter, Loki Promtail, CloudWatch Agent) from reading journal logs. Fix the permissions on the agent's user first, then apply the STIG rule.
+5. **Configuring `pam_faillock` lockout without a console or SSM fallback** — if you set `deny=3` and the lockout fires on `root` or `ubuntu`, you can be permanently locked out of a remote-only instance. Confirm AWS Systems Manager Session Manager is configured and tested before applying PAM lockout rules.
+6. **Generating AIDE database after the OS is already modified** — AIDE's integrity baseline must be generated on a known-good clean state. Running `aide --init` after applying STIG remediations but before rebooting or before packages are fully settled will bake transient state into the baseline, causing false positives on every subsequent check.
+7. **Applying audit rules with `auditctl -R` without reloading `auditd`** — `auditctl -R file` loads rules for the current session only; they're lost on reboot. Rules must be placed in `/etc/audit/rules.d/*.rules` and loaded with `service auditd restart` (or equivalent) to survive reboots and pass the STIG check.
+
 ## Example prompts
 
 - *"How do I run an OpenSCAP SCAP scan on Ubuntu 24.04 with the DISA STIG benchmark?"*

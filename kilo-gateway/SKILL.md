@@ -16,6 +16,16 @@ Expert assistance with the Kilo.ai API gateway. Uses OpenAI-compatible SDK synta
 - Tracking per-request costs across providers from a single dashboard
 - Integrating Kilo gateway with LangChain, LlamaIndex, or other frameworks
 
+## Pre-flight Checklist
+
+Before writing any API code, verify in order:
+
+1. **Key present**: `echo $KILO_API_KEY` returns your JWT token — get it from kilo.ai dashboard → **API Keys**
+2. **SDK installed**: `pip show openai` — Kilo uses the OpenAI-compatible API; no separate package needed
+3. **base_url exact**: must be `https://api.kilo.ai/api/gateway` (note the `/api/gateway` path — missing it gives a 404 on every call)
+4. **Model ID format**: always `provider/model-name` — `anthropic/claude-sonnet-4.5` not `claude-sonnet-4.5`; bare model IDs are rejected
+5. **BYOK configured**: if you added a BYOK key, confirm the provider in dashboard → **Keys** shows "Active" before assuming zero-markup routing is live
+
 ## Quick Reference
 
 ### Installation
@@ -141,14 +151,77 @@ headers = {"Authorization": f"Bearer {os.getenv('KILO_API_KEY')}"}
 - **Free models**: zero cost, usage tracked
 - Cost formula: same as underlying provider (input tokens × $/Mtok + output tokens × $/Mtok)
 
+## Anti-patterns
+
+These all look right but will fail or produce unexpected billing:
+
+1. **Using a bare model ID without the provider prefix** — `claude-sonnet-4.5` gives a 404; it must be `anthropic/claude-sonnet-4.5`. There is no model alias lookup.
+2. **Swapping `base_url` and `api_key` when using two clients in the same script** — a common pattern is to have a direct-provider client and a Kilo client side-by-side; accidentally sending a Kilo request with your Anthropic key (or vice versa) gets a 401 with no useful error message.
+3. **Assuming BYOK is active immediately after adding the key** — Kilo validates BYOK credentials on first use; a newly added key with a typo only fails at call time, not on dashboard save. Always test with a short call before trusting BYOK is wired.
+4. **Using `:free` models in production** — free-tier models may have lower rate limits and no SLA; they're for prototyping. Treat `:free` as "subject to rate-limit at any time" rather than "zero cost with full reliability".
+5. **Passing `X-KiloCode-TaskId` with a different value per request** — the header is a cache key; changing it per call defeats prompt caching. Use a stable ID for calls that share a common system prompt.
+6. **Expecting OpenAI-specific response fields on non-OpenAI models** — Kilo normalises the schema but some providers return `null` for `usage.completion_tokens_details` or `logprobs`; guard with `if response.usage` before accessing sub-fields.
+7. **Not setting `max_tokens`** — behaviour differs by underlying provider; some default to a very short limit, others to unlimited. Always set it explicitly to get predictable costs across model switches.
+
+## Worked Example — Swapping Providers by Changing One Variable
+
+**Scenario**: you want to run the same prompt against Claude, GPT-4o, and a free Gemini model to compare output quality, then pick a winner for production.
+
+```python
+from openai import OpenAI
+import os
+
+kilo = OpenAI(
+    api_key=os.getenv("KILO_API_KEY"),
+    base_url="https://api.kilo.ai/api/gateway",
+)
+
+CANDIDATES = [
+    "anthropic/claude-sonnet-4.5",
+    "openai/gpt-4o",
+    "google/gemini-2.0-flash-exp:free",
+]
+
+PROMPT = "In three sentences, explain why monads are useful in functional programming."
+
+results = {}
+for model_id in CANDIDATES:
+    response = kilo.chat.completions.create(
+        model=model_id,
+        messages=[{"role": "user", "content": PROMPT}],
+        max_tokens=256,
+        temperature=0.3,
+    )
+    results[model_id] = {
+        "text": response.choices[0].message.content,
+        "tokens_in":  response.usage.prompt_tokens if response.usage else "n/a",
+        "tokens_out": response.usage.completion_tokens if response.usage else "n/a",
+    }
+
+for model_id, r in results.items():
+    print(f"\n=== {model_id} ({r['tokens_in']} in / {r['tokens_out']} out) ===")
+    print(r["text"])
+```
+
+**Decision table for picking the production model:**
+
+| Model | Cost/call | Quality check | Choice |
+|-------|-----------|--------------|--------|
+| `anthropic/claude-sonnet-4.5` | ~$0.002 | Accurate, nuanced | ✅ Pick if budget allows |
+| `openai/gpt-4o` | ~$0.003 | Accurate, verbose | Consider if GPT preferred |
+| `google/gemini-2.0-flash-exp:free` | $0.00 | Good enough for drafts | ✅ Prototyping / low-stakes |
+
+Promote the winner to `PRODUCTION_MODEL` env var — the only change needed in code.
+
 ## Best Practices
 
 1. **Use BYOK** if you already have Anthropic/OpenAI accounts — eliminates any Kilo margin
 2. **model ID format is `provider/model-name`** — always prefix with provider
 3. **Same SDK, different base_url** — swap between direct provider and Kilo by changing one env var
 4. **Free models** are useful for prototyping; check `:free` suffix in model catalog
-5. **Prompt caching** works via the `X-KiloCode-TaskId` header to share cache across calls
+5. **Prompt caching** works via the `X-KiloCode-TaskId` header to share cache across calls — keep it stable per use-case
 6. **Framework compat**: any library that accepts a custom `base_url`/`openai_api_base` works with Kilo
+7. **Guard `response.usage`** before accessing sub-fields — not all providers populate every field
 
 ## Official Docs
 

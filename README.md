@@ -46,7 +46,7 @@ Or install all skills at once:
 
 ```bash
 for skill in postgres-ops nextjs-monorepo-ci k8s-nextjs-deploy confluence-to-nextjs ubuntu24-stig login-gov arcgis-enterprise-k8s loki-best-practices session-handoff anthropic-sdk openai-sdk kilo-gateway; do
-  npx skills add andreab67/agent-skills@$skill -g -y
+  npx skills add "andreab67/agent-skills@$skill" -g -y
 done
 ```
 

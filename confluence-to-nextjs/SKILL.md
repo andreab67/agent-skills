@@ -197,6 +197,18 @@ it("renders standard support anchor", () => {
 
 When a heading appears at multiple levels (h2 + h3 with similar text), use `{ level: 2 }` in the query to avoid `Found multiple elements` errors.
 
+## Anti-patterns
+
+These look reasonable during a Confluence migration but cause broken pages or stale content:
+
+1. **Fetching in `body-format=view` instead of `body-format=storage`** — `view` returns rendered HTML with session-relative image URLs and Confluence CDN paths that are unauthenticated and will 404 in production. Always use `storage` format and handle the `<ac:*>` macros explicitly.
+2. **Using heading text as anchor IDs without slugification** — Confluence heading anchors can contain spaces, special characters, and accents. Using heading text directly as `id=` attributes breaks `#fragment` links. Always run the text through `slugify()` and store the mapping.
+3. **Assuming the `sub` UUID in headings is stable across page versions** — Confluence internally uses UUID-based heading IDs in some contexts; these change when content is edited. Base your anchor IDs on the visible heading text, not on any Confluence internal identifier.
+4. **Building the Table of Contents from static render rather than `IntersectionObserver`** — a static list of links scrolls fine but shows no active state. The `IntersectionObserver` approach in Step 4 is non-negotiable for UX parity with Confluence's native sidebar.
+5. **Migrating pages with `<ac:structured-macro name="include">` transclusion** — Confluence's include macro pulls content from other pages at render time. In a static Next.js migration, the included content must be inlined at build time or fetched as a separate API call. Treating it as a simple HTML element will produce a broken macro tag in production.
+6. **Not deduplicating `id` attributes across a page** — when Confluence content has two headings with the same text (e.g., two "Overview" sections in a long doc), both will get `id="overview"`, breaking anchor navigation. Append a numeric suffix on collision: `overview`, `overview-2`, etc.
+7. **Forgetting to update `next-sitemap.config.js`** — migrated KB pages won't appear in Google's index until the sitemap lists them. Add the new routes explicitly or ensure the dynamic route is covered by the sitemap generation logic.
+
 ## Example prompts
 
 - *"I want to replace our Confluence KB with a self-hosted Next.js site. Where do I start?"*

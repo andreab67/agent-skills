@@ -17,6 +17,16 @@ Expert assistance with the OpenAI Python SDK (`openai` package). Covers chat com
 - Using structured outputs (JSON mode / `response_format`)
 - Building streaming chat applications
 
+## Pre-flight Checklist
+
+Before writing any API code, verify in order:
+
+1. **Key present**: `echo $OPENAI_API_KEY` returns a value starting with `sk-`
+2. **SDK installed**: `python -c "import openai; print(openai.__version__)"` succeeds (need ≥ 1.0.0 for the new client)
+3. **tiktoken available**: `pip show tiktoken` — needed for token counting; not auto-installed with `openai`
+4. **Model ID exact**: `gpt-4o` not `gpt4o`; `gpt-4o-mini` not `gpt-4-mini` — wrong IDs return 404, not a fallback
+5. **JSON mode**: if using `response_format={"type": "json_object"}`, the word `"JSON"` must appear in your messages or the API errors
+
 ## Quick Reference
 
 ### Installation
@@ -108,7 +118,7 @@ response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{
         "role": "user",
-        "content": "Extract: name, version, language from 'FastAPI 0.115.5 Python framework'"
+        "content": "Extract: name, version, language from 'FastAPI 0.115.5 Python framework'. Return JSON."
     }],
     response_format={"type": "json_object"},
 )
@@ -195,6 +205,94 @@ except AuthenticationError:
     print("Invalid API key")
 ```
 
+## Anti-patterns
+
+These all look reasonable but will silently fail or waste money:
+
+1. **Setting `temperature` on o1 or o3** — reasoning models ignore `temperature`; the parameter is accepted but has no effect, so any "deterministic reasoning" code you write around it is a no-op.
+2. **Using `response_format={"type": "json_object"}` without the word "JSON" in the messages** — the API raises a 400; you must include "JSON" (case-insensitive) somewhere in your system or user message.
+3. **Omitting the assistant tool-call message before the tool result** — when appending the conversation after a tool call, you must include `response.choices[0].message` (the assistant turn) before the `{"role": "tool", ...}` entry; skipping it causes a 400.
+4. **Embedding batch size too large** — the embeddings API accepts up to 2048 inputs per call; passing a larger list errors silently in some SDK versions and hard-errors in others. Chunk at ≤2048.
+5. **Using `tiktoken` on o1/o3** — there is no public tiktoken encoder for reasoning models; `tiktoken.encoding_for_model("o3")` throws `KeyError`. Use `gpt-4o` encoding as an approximation and add ~10% buffer.
+6. **Not checking `finish_reason` before accessing `tool_calls`** — if `finish_reason` is `"length"` instead of `"tool_calls"`, `message.tool_calls` is `None` and your code crashes.
+7. **Streaming with structured JSON mode** — `stream=True` and `response_format={"type":"json_object"}` together give you fragmented JSON chunks; you must buffer the full stream before `json.loads()`.
+
+## Worked Example — Function Calling with Triage Decisions
+
+**Scenario**: a support agent that can look up order status or escalate to a human.
+
+```python
+from openai import OpenAI
+import json
+
+client = OpenAI()
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_order_status",
+            "description": "Return the current status and estimated delivery date for an order ID",
+            "parameters": {
+                "type": "object",
+                "properties": {"order_id": {"type": "string"}},
+                "required": ["order_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "escalate_to_human",
+            "description": "Open a support ticket and notify a human agent",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {"type": "string"},
+                    "customer_id": {"type": "string"},
+                },
+                "required": ["reason", "customer_id"],
+            },
+        },
+    },
+]
+
+messages = [
+    {"role": "system", "content": "You are a helpful support agent."},
+    {"role": "user", "content": "Order #ORD-8821 hasn't arrived. It's been 3 weeks."},
+]
+
+response = client.chat.completions.create(
+    model="gpt-4o", max_tokens=512, tools=tools, tool_choice="auto", messages=messages
+)
+
+# Check finish_reason BEFORE accessing tool_calls
+if response.choices[0].finish_reason == "tool_calls":
+    tool_call = response.choices[0].message.tool_calls[0]
+    args = json.loads(tool_call.function.arguments)
+
+    if tool_call.function.name == "get_order_status":
+        result = lookup_order(args["order_id"])
+    elif tool_call.function.name == "escalate_to_human":
+        result = create_ticket(args["reason"], args["customer_id"])
+
+    # Append BOTH: assistant turn, then tool result
+    messages.append(response.choices[0].message)
+    messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(result)})
+
+    final = client.chat.completions.create(model="gpt-4o", max_tokens=512, messages=messages)
+    print(final.choices[0].message.content)
+```
+
+**Loop triage table for this agent:**
+
+| `finish_reason` | `tool_call.name` | Action |
+|-----------------|-----------------|--------|
+| `"tool_calls"` | `get_order_status` | Look up order, append result, continue |
+| `"tool_calls"` | `escalate_to_human` | Create ticket, append result, continue |
+| `"stop"` | — | Final answer — print and done |
+| `"length"` | — | Response cut — raise `max_tokens` |
+
 ## Best Practices
 
 1. **Always set `max_tokens`** — default is unlimited and expensive
@@ -204,6 +302,7 @@ except AuthenticationError:
 5. **Temperature 0.0** for code generation; skip temperature for o1/o3 (they ignore it)
 6. **JSON mode** requires the word "JSON" somewhere in the messages
 7. **Embeddings**: use `text-embedding-3-small` unless you need max accuracy
+8. **Check `finish_reason`** before accessing `tool_calls` or `content`
 
 ## Official Docs
 

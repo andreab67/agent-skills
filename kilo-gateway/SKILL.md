@@ -146,10 +146,32 @@ headers = {"Authorization": f"Bearer {os.getenv('KILO_API_KEY')}"}
 
 ## Cost & Billing
 
-- **Managed billing**: Kilo tracks usage with microdollar precision; view per-request breakdown in dashboard
-- **BYOK**: $0 via Kilo; provider bills you directly
-- **Free models**: zero cost, usage tracked
-- Cost formula: same as underlying provider (input tokens × $/Mtok + output tokens × $/Mtok)
+- **Managed billing**: Kilo tracks usage with **microdollar precision** (1 USD =
+  1,000,000 microdollars). Cost is computed from input tokens, output tokens, and
+  cache write/hit tokens. Billing flow per request: balance check → execute →
+  extract usage from response → atomic balance update.
+- **BYOK**: $0 via Kilo; provider bills you directly.
+- **Free models**: zero cost, usage tracked. Rate-limited to **200 requests/hour
+  per IP** (HTTP 429 when exceeded). Paid models have no gateway-level limit, but
+  upstream provider limits still apply.
+- Cost formula: same as underlying provider (input tokens × $/Mtok + output tokens × $/Mtok).
+
+### Checking balance / usage — there is NO usage API endpoint
+
+> **Important for dashboards:** the Kilo gateway exposes **no REST endpoint** for
+> querying balance or spend. Per the docs, usage/balance is **dashboard-only**
+> (`https://app.kilo.ai`). The only programmatic signal is the **402 on depletion**
+> (see below). To validate a key / count models, hit
+> `GET https://api.kilo.ai/api/gateway/models` — that is what sr-models'
+> `_check_kilo()` does, since there is no balance endpoint to call.
+
+- **Balance depleted** → paid-model requests return **HTTP 402** with a
+  `buyCreditsUrl` in the error metadata pointing to `https://app.kilo.ai/credits`.
+- **Organization accounts**: shared credit pool with per-member **daily spend
+  caps**, plus auto top-up and minimum-balance alerts (configured in dashboard).
+- Per-request usage fields tracked (visible in dashboard, returned in
+  `response.usage`): model id, provider, token counts, cache metrics, cost in
+  microdollars, latency, BYOK status.
 
 ## Anti-patterns
 
@@ -229,3 +251,4 @@ Promote the winner to `PRODUCTION_MODEL` env var — the only change needed in c
 - SDKs & Frameworks: https://kilo.ai/docs/gateway/sdks-and-frameworks
 - Model catalog: https://kilo.ai/docs/gateway/models
 - BYOK setup: https://kilo.ai/docs/gateway/byok
+- Usage & billing: https://kilo.ai/docs/gateway/usage-and-billing

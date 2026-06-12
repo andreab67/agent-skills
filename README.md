@@ -22,6 +22,7 @@ Personal collection of [agent skills](https://skills.sh/) for use with Claude Co
 | [`anthropic-sdk`](./anthropic-sdk/SKILL.md) | [docs](./docs/anthropic-sdk.md) | Anthropic Python SDK expert: Messages API, streaming, multi-turn tool use loop, `count_tokens()` pre-flight, prompt caching with `cache_control`, vision input, model selection (Opus 4.7 / Sonnet 4.6 / Haiku 4.5) with pricing table and cost estimation helper. |
 | [`openai-sdk`](./openai-sdk/SKILL.md) | [docs](./docs/openai-sdk.md) | OpenAI Python SDK expert: chat completions, streaming, function calling with tool_call loop, JSON structured output, embeddings, tiktoken token counting with `count_message_tokens()` helper, GPT-4o/mini/o1/o3 pricing table, and cost estimation. |
 | [`kilo-gateway`](./kilo-gateway/SKILL.md) | [docs](./docs/kilo-gateway.md) | Kilo.ai OpenAI-compatible gateway over 500+ models: `base_url="https://api.kilo.ai/api/gateway"`, BYOK setup (zero Kilo markup), `provider/model-name` routing format, Python/TypeScript/cURL/LangChain patterns, prompt-cache header, and free-model `:free` suffix. |
+| [`openrouter`](./openrouter/SKILL.md) | [docs](./docs/openrouter.md) | OpenRouter unified API over 300+ models: OpenAI-compatible chat/streaming/JSON-mode, model fallbacks and `openrouter/auto` routing, sampling-parameter guide, plus account/analytics endpoints for dashboards — `/credits`, `/keys`, `/activity` (management-key-only, last-30-completed-UTC-days lag), beta `/analytics/query`, and the `/models` pricing catalog (full field reference). |
 
 ## Install
 
@@ -40,12 +41,13 @@ npx skills add andreab67/agent-skills@session-handoff -g -y
 npx skills add andreab67/agent-skills@anthropic-sdk -g -y
 npx skills add andreab67/agent-skills@openai-sdk -g -y
 npx skills add andreab67/agent-skills@kilo-gateway -g -y
+npx skills add andreab67/agent-skills@openrouter -g -y
 ```
 
 Or install all skills at once:
 
 ```bash
-for skill in postgres-ops nextjs-monorepo-ci k8s-nextjs-deploy confluence-to-nextjs ubuntu24-stig login-gov arcgis-enterprise-k8s loki-best-practices session-handoff anthropic-sdk openai-sdk kilo-gateway; do
+for skill in postgres-ops nextjs-monorepo-ci k8s-nextjs-deploy confluence-to-nextjs ubuntu24-stig login-gov arcgis-enterprise-k8s loki-best-practices session-handoff anthropic-sdk openai-sdk kilo-gateway openrouter; do
   npx skills add "andreab67/agent-skills@$skill" -g -y
 done
 ```

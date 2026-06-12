@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.4 — 2026-06-12
+
+New `openrouter` skill plus account/billing endpoint coverage for dashboard work.
+
+### New skill
+
+- **`openrouter`** — unified API over 300+ models (OpenAI-compatible chat,
+  streaming, JSON mode, fallback arrays, `openrouter/auto`, sampling guide) with a
+  dedicated `references/account-analytics-endpoints.md` covering the management
+  endpoints needed for cost dashboards: `/credits`, `/keys`, `/activity`,
+  beta `/analytics/meta` + `/analytics/query`, and the `/models` catalog. Documents
+  the two dashboard gotchas: activity/analytics are **management-key-only** (regular
+  keys 403), and `/activity` only returns the **last 30 _completed_ UTC days** (today
+  excluded — empty ≠ broken).
+
+### `kilo-gateway` updates
+
+- Expanded **Cost & Billing**: microdollar billing flow (balance check → execute →
+  extract → atomic update), free-model **200 req/hr/IP** limit, org daily spend caps.
+- Documented that Kilo exposes **no usage/balance REST endpoint** — usage is
+  dashboard-only; the only programmatic signal is **HTTP 402 + `buyCreditsUrl`** on
+  depletion. Validate keys / count models via `GET /api/gateway/models`.
+- Added the usage-and-billing doc link.
+
 ## v1.3 — 2026-06-09
 
 Quality pass across all 12 skills — every skill now meets the full quality bar.

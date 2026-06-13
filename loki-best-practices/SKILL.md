@@ -100,6 +100,7 @@ First-install and version-bump landmines. Most manifest as Loki refusing to star
 - **TSDB migration** that returns "no data" for pre-migration ranges: both `period_config` entries must share the same `object_store` and chunk path prefix. Keep the legacy `boltdb_shipper` block until the old period ages out of retention.
 - **Replication factor exceeds healthy ingester count**: writes return `at least N live replicas required`. Match RF to ingester count (1 ingester → RF 1, 3 ingesters → RF 3) and use PDBs + topology spread so a rolling node upgrade can't take more than one ingester down.
 - **`Cannot run Scalable targets without an object storage backend`**: SimpleScalable and Distributed need shared object storage. Filesystem is dev-only.
+- **memcached chunk/results caches default to absurd sizes.** The `grafana/loki` chart ships `chunksCache.allocatedMemory: 8192` and `resultsCache.allocatedMemory: 1024` (MB). That number is *both* memcached's `-m` flag *and* the pod's memory request **and** limit, computed as `allocatedMemory × 1.2` Mi — so the chunk cache alone reserves `8192 × 1.2 = 9830Mi` and the two caches together pin **~11Gi per cluster**, scheduled whether or not your log volume justifies it. On a single-binary / home-scale deployment this is routinely the single largest memory reservation in the namespace, and because the cache pods are BestEffort-adjacent giants they're the first thing to block scheduling or evict neighbours (verified in the field: a 16Gi worker sitting at 89% MEM requests was almost entirely this one pod). Right-size to the working set — `chunksCache.allocatedMemory: 1024` + `resultsCache.allocatedMemory: 256` covers < ~50 GB/day and drops the footprint to ~1.5Gi. These keys deep-merge under `helm upgrade --reuse-values -f`, so the fix is a two-line values overlay; the StatefulSet's memcached `-m` and `resources` both move together. Set `enabled: false` only if you can tolerate cold object-storage reads on every query.
 
 #### 2c. Integration
 
@@ -204,7 +205,7 @@ Scrape Loki's own `/metrics` into the same Prometheus that scrapes the apps it i
 
 ## Most common pitfalls (top P1 hit list)
 
-The seven things that take down clusters most often. Memorize these — they cover the bulk of real incidents.
+The eight things that take down clusters most often. Memorize these — they cover the bulk of real incidents.
 
 1. **Helm chart deployment-mode collision** — `singleBinary` and `simple-scalable` replicas both set; install hard-fails. Pick one.
 2. **Schema period not 24h** on TSDB / modern boltdb-shipper — Loki refuses to start.
@@ -213,6 +214,7 @@ The seven things that take down clusters most often. Memorize these — they cov
 5. **IRSA / Workload Identity misconfigured** — chunks never flush; WAL fills; ingester eventually OOMs.
 6. **High-cardinality label leaks** — request ID, trace ID, or full URL added as a label. Streams explode, queries melt.
 7. **Compactor not actually running** (or running as two replicas) — retention silently broken.
+8. **memcached cache `allocatedMemory` left at chart defaults** — `chunksCache` (8192) + `resultsCache` (1024) reserve ~11Gi *per cluster* regardless of log volume (request/limit = `allocatedMemory × 1.2` Mi). Not an outage, but the namespace's biggest memory hog — blocks scheduling and is first to evict neighbours. Right-size to the working set (1024 / 256).
 
 ## Diagnostic command cheatsheet
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.5 — 2026-06-17
+
+New `magnific` skill — full coverage of the Magnific generative-media API, crawled from every page of docs.magnific.com.
+
+### New skill — `magnific`
+
+- **`magnific`** — the Magnific API (`https://api.magnific.com/v1`, part of Freepik):
+  image generation, AI upscaling, video, audio, and stock content through one
+  **async task API**. `SKILL.md` front-loads the submit→`task_id`→poll-or-webhook
+  model, `x-magnific-api-key` auth, a robust poll helper, a working Svix-style
+  HMAC-SHA256 webhook verifier (Python + Node), the full model catalog, a
+  pre-flight checklist, and a 9-item anti-patterns gallery (empty `generated`
+  array, sync Remove-Background, `task_status` on Style Transfer, NSFW defaults,
+  25.3 MP upscaler cap, Runway pixel-ratio strings). Five `references/` files
+  document all ~60 endpoints verbatim (parameters, enums, defaults,
+  request/response examples): `foundations`, `image-generation`, `image-editing`,
+  `video-generation`, `audio`, `analytics-and-stock`. Covers Mystic, Flux ×7,
+  Seedream, Z-Image, the Creative/Precision upscalers, Relight, Style Transfer,
+  Remove Background, Image Expand, Kling, MiniMax, WAN, Runway, LTX, Seedance,
+  PixVerse, OmniHuman, VFX, music/SFX/isolation, team analytics, and stock
+  icons/videos/templates — plus rate limits, the credit pricing model, and the
+  hosted MCP server.
+
 ## v1.4 — 2026-06-12
 
 New `openrouter` skill plus account/billing endpoint coverage for dashboard work.

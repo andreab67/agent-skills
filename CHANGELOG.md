@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.6 — 2026-07-08
+
+Quality-bar sync from the ai-optimization skill dashboard's automated rubric pass — Error Handling sections across 5 skills, plus a real script extraction for `confluence-to-nextjs`.
+
+### Error Handling sections added
+
+- **`arcgis-enterprise-k8s`** — 6-row troubleshooting table: PVC stuck `Pending`, invalid license, LoadBalancer stuck `<pending>`, TLS/FQDN mismatch after deploy, upgrade rollout hang, `webgisdr` export failure.
+- **`confluence-to-nextjs`** — 7 failure modes: 401/403, wrong page ID (404), 429 rate limiting on bulk exports, unmapped `<ac:structured-macro>` types, broken image/attachment links, malformed storage HTML breaking JSX, unmigrated internal `<ac:link>` targets.
+- **`k8s-nextjs-deploy`** — new "Deploying a new Next.js app — step by step" (6 steps, namespace → pull secret → Deployment → Service → Ingress → verify), each with an explicit success check.
+- **`kilo-gateway`** — 7-row signal/cause/recovery table: 404 misrouting, 401 key issues, 402 balance depletion, 429 free-tier limiting, BYOK silent failure, missing `usage` fields, hung streams.
+- **`nextjs-monorepo-ci`** — new "Adding a new app to the pipeline — step by step" (7 steps: scaffold → validate → build → obfuscate → package → notify → IndexNow key), matching the pipeline's own stage order.
+- **`postgres-ops`** — 7 failure modes tied to the diagnostic workflows already documented: connection exhaustion blocking diagnosis itself, `EXPLAIN ANALYZE` executing writes for real, missing `pg_stat_statements`, `CREATE INDEX CONCURRENTLY` left `INVALID`, `pg_upgrade --check` extension mismatches, pgBouncer transaction-pooling prepared-statement errors, empty replication-lag reads.
+
+### `confluence-to-nextjs` script extraction
+
+- Added `scripts/fetch-page.sh` — parameterized Confluence REST API v2 fetch (pins `body-format=storage`, fails loudly with the response body on 401/403/404 instead of writing an error payload silently to disk).
+- Added `scripts/slugify.mjs` — the heading-to-anchor-ID slug generator from Step 2, plus `dedupeSlugs()` for the numeric-suffix collision handling described in Anti-pattern 6.
+- Step 1 and Step 2 in `SKILL.md` now reference these scripts instead of inline snippets.
+
 ## v1.5 — 2026-06-17
 
 New `magnific` skill — full coverage of the Magnific generative-media API, crawled from every page of docs.magnific.com.

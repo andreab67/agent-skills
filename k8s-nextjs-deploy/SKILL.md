@@ -20,6 +20,15 @@ Do NOT use for:
 - Non-Kubernetes deployments (Docker Compose, bare-metal, Vercel)
 - Database deployments (stateful sets require separate skill)
 
+## Deploying a new Next.js app — step by step
+
+1. **Create the namespace** (if it doesn't exist yet): `kubectl create namespace <ns>`. *Success*: `kubectl get ns <ns>` shows `Active`.
+2. **Create the Harbor pull secret** using the single-quoted `docker-registry` command below. *Success*: `kubectl -n <ns> get secret harbor-pull-secret` exists and `describe` shows type `kubernetes.io/dockerconfigjson`.
+3. **Apply the Deployment manifest** (with `imagePullSecrets`, resource requests/limits, and readiness/liveness probes set). *Success*: `kubectl -n <ns> get pods` shows the pod `Running` and `1/1 Ready`.
+4. **Apply the Service**. *Success*: `kubectl -n <ns> get svc <name>` shows a ClusterIP with the expected port mapping.
+5. **Apply/extend the Ingress**, adding the new host to both `tls.hosts` and `rules`. *Success*: `kubectl -n <ns> get ingress` lists the host, and `kubectl -n <ns> get certificate` reaches `READY: True` within a couple of minutes as cert-manager issues the cert.
+6. **Verify end-to-end**: `curl -I https://<host>` returns `200`/`3xx` with a trusted TLS chain (no cert warning). If it doesn't, work through Common failure diagnosis below.
+
 ## Deployment manifest
 
 ```yaml

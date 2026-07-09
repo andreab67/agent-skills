@@ -19,12 +19,11 @@ Do NOT use for:
 
 ## Step 1: Fetch Confluence content
 
-Use the Confluence REST API v2 with a personal API token:
+Use `scripts/fetch-page.sh` rather than hand-rolling the curl call — it pins `body-format=storage` (never `view` — see Anti-pattern 1), checks the HTTP status, and fails loudly with the response body on 401/403/404 instead of silently writing an error payload to disk:
 
 ```bash
-curl -u "user@example.com:ATATT3x..." \
-  "https://your-org.atlassian.net/wiki/api/v2/pages/PAGE_ID?body-format=storage" \
-  -o page.json
+CONFLUENCE_EMAIL=user@example.com CONFLUENCE_TOKEN=ATATT3x... \
+  ./scripts/fetch-page.sh your-org PAGE_ID page.json
 ```
 
 The `storage` format returns HTML with Confluence-specific tags (`<ac:structured-macro>`, `<ac:parameter>`, `<ri:attachment>`) that must be stripped and converted.
@@ -40,12 +39,11 @@ The `storage` format returns HTML with Confluence-specific tags (`<ac:structured
 | `<strong>`, `<em>`, `<code>` | Pass through as-is |
 | `<ul>`, `<ol>`, `<li>` | Pass through as-is |
 
-Slug generation for heading IDs:
+Slug generation for heading IDs — use `scripts/slugify.mjs` rather than reimplementing it per migration; it also dedupes collisions (Anti-pattern 6) via `dedupeSlugs()`:
 
-```typescript
-function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
+```bash
+node scripts/slugify.mjs "Standard Support Contract"   # -> standard-support-contract
+node scripts/slugify.mjs --file headings.txt           # dedup a whole page's headings in order
 ```
 
 ## Step 3: Page structure
@@ -208,6 +206,18 @@ These look reasonable during a Confluence migration but cause broken pages or st
 5. **Migrating pages with `<ac:structured-macro name="include">` transclusion** — Confluence's include macro pulls content from other pages at render time. In a static Next.js migration, the included content must be inlined at build time or fetched as a separate API call. Treating it as a simple HTML element will produce a broken macro tag in production.
 6. **Not deduplicating `id` attributes across a page** — when Confluence content has two headings with the same text (e.g., two "Overview" sections in a long doc), both will get `id="overview"`, breaking anchor navigation. Append a numeric suffix on collision: `overview`, `overview-2`, etc.
 7. **Forgetting to update `next-sitemap.config.js`** — migrated KB pages won't appear in Google's index until the sitemap lists them. Add the new routes explicitly or ensure the dynamic route is covered by the sitemap generation logic.
+
+## Error Handling
+
+Realistic failure modes when running a Confluence migration, how to detect them, and how to recover:
+
+1. **401/403 from the REST API** — invalid or expired personal API token, or the page lives in a restricted space. Detect: the response body is `{"statusCode":401,...}` or `403`. Recovery: regenerate the token in Atlassian account settings, or get a space admin to grant read access before retrying.
+2. **404 on `pages/PAGE_ID`** — wrong page ID, or the ID belongs to a different Confluence site/cloud instance. Detect: JSON body `{"statusCode":404}`. Recovery: re-derive the page ID from "..." → "Page information" (`pageId=` in that URL), not from the pretty URL slug.
+3. **429 rate limiting on bulk exports** — hit when migrating many pages in a tight loop. Detect: HTTP 429 with a `Retry-After` header. Recovery: back off per the header and batch requests in small groups instead of fetching the whole space at once.
+4. **Unmapped `<ac:structured-macro>` types** — the conversion table in Step 2 only covers `info`. Macros like `note`, `warning`, `expand`, `code`, or `jira` pass through as raw `<ac:structured-macro>` tags. Detect: build fails on an unknown tag, or the macro renders as literal markup in the browser. Recovery: extend the conversion table per macro name before converting the page — don't blind-strip unfamiliar macros.
+5. **Broken image/attachment links** — `<ri:attachment>` references Confluence-hosted binaries that the page-body API doesn't return inline. Detect: `<img>` 404s against the Confluence CDN in production (unauthenticated). Recovery: fetch attachments separately via `/wiki/api/v2/pages/{id}/attachments`, download into `public/`, and rewrite `src` to the local path.
+6. **Malformed storage HTML breaks JSX parsing** — unclosed tags or stray entities from Confluence's rich text editor aren't valid JSX. Detect: build-time JSX syntax error pointing at the converted file. Recovery: normalize the storage HTML (balance tags, escape entities) before hand-authoring the `.tsx`, rather than pasting raw storage output directly.
+7. **Internal `<ac:link>` targets not yet migrated** — linking to a Confluence page that hasn't been converted produces a dead `/kb/...` route. Detect: 404 when clicking through during review. Recovery: keep a migration tracking table (Confluence page ID → KB route) and point unconverted links at the original Confluence URL until that page ships.
 
 ## Example prompts
 

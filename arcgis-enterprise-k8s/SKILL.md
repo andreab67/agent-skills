@@ -217,6 +217,19 @@ kubectl -n arcgis rollout status deployment --timeout=30m
 
 ---
 
+## Error Handling
+
+| Symptom | Likely cause | Recovery |
+|---------|-------------|----------|
+| `arcgis-enterprise-k8s.sh deploy` hangs at "waiting for pods" | PVC stuck `Pending` — storage class missing or provisioner can't satisfy the request | `kubectl -n arcgis get pvc` then `kubectl -n arcgis describe pvc <name>` for events; confirm the storage class exists (`kubectl get sc`) and cloud quota (EBS/managed disk) isn't exhausted |
+| Deploy script exits with "invalid license" | License file expired, wrong entitlement, or doesn't match the deployment profile | Re-download the license from My Esri, confirm it matches the profile in `configure.json`, re-run `deploy` — do not fall back to `upgrade` on a fresh deployment |
+| Ingress/LoadBalancer service stuck `<pending>` for EXTERNAL-IP | Cloud LB/EIP quota exhausted, or the cluster's LB controller lacks IAM permissions to provision | `kubectl -n arcgis describe svc <ingress-svc>` for events; check the cloud console for quota; verify the LB controller's service account/role can create load balancers |
+| Manager/Portal login fails with a TLS warning right after deploy | FQDN in the cert doesn't match the FQDN configured in `configure.json` | Re-check with the `openssl x509 ... Subject Alternative` command above; do not attempt to change the FQDN post-deploy — see anti-pattern #2, this requires a full redeploy |
+| `arcgis-enterprise-k8s.sh upgrade` hangs mid-rollout | A component exceeded its readiness timeout, often the spatiotemporal store replaying its write-ahead log | `kubectl -n arcgis rollout status deployment --timeout=30m` shows which deployment is stuck; check `kubectl -n arcgis logs <pod> --previous`; if genuinely stuck, restore from the pre-upgrade PVC snapshot rather than force-deleting pods |
+| `webgisdr` export fails partway through | Insufficient space at the backup target, or a service was mid-restart during export | Confirm the target has free space ≥2x content size; re-run only after every pod in `kubectl -n arcgis get pods` shows `Running` |
+
+---
+
 ## Licensing
 
 - License is file-based (`.json` from My Esri)

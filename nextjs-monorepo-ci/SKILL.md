@@ -205,6 +205,16 @@ Serve the IndexNow key file from `public/` in the Next.js app:
 echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 ```
 
+## Adding a new app to the pipeline — step by step
+
+1. **Scaffold the app directory** — `apps/<name>/` with its own `package.json`; run `npm install` locally and commit `package-lock.json`. *Success*: `npm ci` would succeed from a clean clone (no lockfile-missing failure).
+2. **Add validate-stage jobs** — copy `lint-web`/`test-web` as `lint-<name>`/`test-<name>`, pointing `cd apps/<name>` and using a `<name>-${CI_COMMIT_REF_SLUG}` cache key. *Success*: the new jobs appear under `validate` in the pipeline graph and pass on a trivial commit.
+3. **Extend the build stage** — add a `build-<name>` job that extends `.app_build` with `variables: { APP_NAME: <name> }`. *Success*: `apps/<name>/.next/` and `apps/<name>/public/` appear as job artifacts.
+4. **Extend the obfuscate stage** — add `obfuscate-<name>` extending `.app_obfuscate` with the same `APP_NAME`. *Success*: the resulting image boots without `ChunkLoadError` (see the Turbopack/externals exclusion above).
+5. **Extend the package stage** — add `package-<name>` extending `.kaniko_package`, pointing at `apps/<name>/Dockerfile`. *Success*: the image lands in Harbor tagged with `$CI_COMMIT_SHA`.
+6. **Add the new job to `notify`'s `needs`** — append `package-<name>` to the `indexnow` job's `needs: [...]` list. *Success*: the pipeline DAG shows `notify` gated on all package jobs, including the new one.
+7. **Add the IndexNow key file** (if the app serves its own domain/subdomain) — `echo -n "YOUR_KEY" > apps/<name>/public/YOUR_KEY.txt`, and allowlist the pattern in `.gitleaks.toml` if not already covered. *Success*: `gitleaks detect` passes and the key file is served under the app's public path.
+
 ## Common failure patterns
 
 | Symptom | Cause | Fix |

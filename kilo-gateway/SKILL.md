@@ -173,6 +173,18 @@ headers = {"Authorization": f"Bearer {os.getenv('KILO_API_KEY')}"}
   `response.usage`): model id, provider, token counts, cache metrics, cost in
   microdollars, latency, BYOK status.
 
+## Error Handling
+
+| Signal | Cause | Recovery |
+|--------|-------|----------|
+| `404 Not Found` on every call | `base_url` missing `/api/gateway`, or a bare model ID without the `provider/` prefix | Fix `base_url` to `https://api.kilo.ai/api/gateway`; prefix the model, e.g. `anthropic/claude-sonnet-4.5` |
+| `401 Unauthorized` | Wrong/expired `KILO_API_KEY`, or a direct-provider key was passed to the Kilo client by mistake | `echo $KILO_API_KEY` and regenerate from dashboard → API Keys if empty/stale; confirm the client using `base_url=...kilo.ai...` is also the one using `KILO_API_KEY`, not a provider key |
+| `402 Payment Required` with `buyCreditsUrl` in the error body | Managed-billing balance depleted | Top up at `https://app.kilo.ai/credits`, or route the request through BYOK if a provider key is already configured |
+| `429 Too Many Requests` on a `:free` model | Free-tier rate limit — 200 requests/hour per IP | Back off and retry, or switch to the paid (non-`:free`) version of the model for production traffic |
+| BYOK request fails but managed billing works for the same model | BYOK key has a typo or was revoked upstream — Kilo only validates it on first use | Confirm dashboard → Keys shows "Active"; re-test with one minimal call before trusting BYOK for a batch job |
+| `response.usage` is `None` or missing sub-fields | Underlying provider doesn't populate that field; Kilo doesn't backfill it | Guard with `if response.usage:` before accessing sub-fields |
+| Streaming call hangs with no chunks | Model/provider doesn't support `stream=True`, or the connection dropped mid-stream | Fall back to non-streaming for that model, or wrap the `with` block in a timeout and retry once |
+
 ## Anti-patterns
 
 These all look right but will fail or produce unexpected billing:

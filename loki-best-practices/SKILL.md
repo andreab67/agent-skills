@@ -38,109 +38,18 @@ For any Loki incident, follow hypothesis → evidence → fix → verification. 
 sum by (reason) (rate(loki_discarded_samples_total[5m]))
 ```
 
-If the rate is non-zero, the `reason` label is the entire diagnosis. Map it:
-
-| Reason | Root cause class | Fix path |
-| --- | --- | --- |
-| `rate_limited` | Tenant `ingestion_rate_mb` / `ingestion_burst_size_mb` exceeded | Runtime overrides per tenant, or scale distributors (global strategy) |
-| `per_stream_rate_limit` | One hot stream > 3 MB/s | Split the stream at the agent with a discriminating label — do NOT just crank the limit |
-| `stream_limit` | Active streams > `max_global_streams_per_user` (default 5000) | Find the high-cardinality label and drop it / move to structured metadata |
-| `out_of_order` / `too_far_behind` | Clock skew, log replay, agent timestamp regex broken | Fix NTP first, then widen `out_of_order_time_window` if real |
-| `line_too_long` | Line > `max_line_size` (default 256 KB) | Set `max_line_size_truncate: true`, or split at source |
-| `greater_than_max_sample_age` | Entry > `reject_old_samples_max_age` (default 7d) | Per-tenant override for backfill, revert after |
-| `invalid_labels` / `missing_labels` / `duplicate_label_names` | Agent pipeline bug (often OTel attribute names with dots) | Sanitize at the agent — any non-zero rate here is a config bug |
-
-Default first-look commands (all of these are in the cheatsheet at the bottom — keep them in muscle memory):
-
-```bash
-# Discarded samples broken down by reason — the single most useful query
-curl -s http://loki:3100/metrics | grep '^loki_discarded_samples_total' | sort -k 2 -n -r | head
-
-# Ring health (any of: ingester, ruler, scheduler, index-gateway, compactor)
-curl -s http://loki:3100/ring | grep -E "ACTIVE|LEAVING|UNHEALTHY"
-
-# Current effective config (Loki dumps the resolved YAML)
-curl -s http://loki:3100/config
-
-# Runtime overrides (per-tenant limits hot-reloaded)
-curl -s http://loki:3100/runtime_config
-
-# Service status — which modules booted, which are degraded
-curl -s http://loki:3100/services
-
-# Per-tenant analyze — find the high-cardinality label
-logcli series '{tenant="foo"}' --analyze-labels --since=1h
-
-# Memberlist members — detect ghosts / IP reuse
-curl -s http://loki:3100/memberlist
-```
-
-Note: Loki's official container image is distroless and has no shell. Run the curls from a sidecar (gateway nginx pod), via `kubectl port-forward svc/loki 3100:3100`, or by calling the binary with an explicit `command:` array — never `sh -c`.
+If the rate is non-zero, the `reason` label is the entire diagnosis — map each reason to its root-cause class and fix path in **[references/command-reference.md](references/command-reference.md#discard-reason--root-cause--fix)**. That file also carries the 10-command triage cheatsheet and the distroless-image caveat (run curls from a sidecar or `kubectl port-forward svc/loki 3100:3100`, never `sh -c` — the official image has no shell).
 
 ### 2. Triage by failure surface
 
-The playbook breaks into six surfaces. For every reported symptom, classify first, then look up the entry. Don't skip classification — it saves the wrong-rabbit-hole tax.
+The playbook breaks into six surfaces. Classify the symptom first, then look up the matching entry in **[references/triage-playbook.md](references/triage-playbook.md)** — each entry has the symptoms, the proof to gather, and the fix. Don't skip classification; it saves the wrong-rabbit-hole tax.
 
-#### 2a. Ingestion (write path)
-
-The chatty surface. Rejections surface as HTTP 4xx on `/loki/api/v1/push` and as counter increases on `loki_discarded_samples_total{reason}` and `loki_discarded_bytes_total{reason}`. Always check the `reason` label before deciding what to change.
-
-- **Don't raise per-stream limits as a first move.** A single stream lives on one ingester; cranking `per_stream_rate_limit` OOMs that pod. Fix the label set instead.
-- **`stream_limit` is almost always a high-cardinality label.** Run `logcli series '{tenant="..."}' --analyze-labels` — sort the output by uniques, find the label with thousands of values (request ID, trace ID, full URL path), drop it at the agent or move to structured metadata.
-- **`out_of_order` after a Promtail restart** usually means the positions file wasn't persisted. Mount `positions.yaml` on a `hostPath` (DaemonSet) or PVC (Deployment).
-- **WAL replay stuck** means either an OOMKill on startup (set `replay_memory_ceiling` to ~75% of pod memory so replay flushes early), a full PVC (expand it or move to a bigger node), or a corrupt segment (identify from the panic line, `rm` only that file, restart — RF covers the loss).
-- **Chunks not flushing** while ingest is hot = object storage write failing silently. `kubectl logs ... | grep -i "failed to flush\|s3\|gcs\|azure"` and `kubectl exec` a test fetch against the bucket from the pod.
-
-#### 2b. Deployment & configuration
-
-First-install and version-bump landmines. Most manifest as Loki refusing to start (CrashLoopBackOff) or silently routing data to nowhere.
-
-- **Helm deployment-mode collision** ("more than zero replicas for both single binary and simple scalable"): pick one — SingleBinary for < 1 TB/day, SimpleScalable for HA at scale, Distributed via the dedicated chart. Zero out the others explicitly.
-- **Schema period must be 24h.** TSDB and modern boltdb-shipper require it. Don't edit the existing `period_config` — add a *new* entry with `from:` set to next UTC midnight and roll out the config before that date.
-- **TSDB migration** that returns "no data" for pre-migration ranges: both `period_config` entries must share the same `object_store` and chunk path prefix. Keep the legacy `boltdb_shipper` block until the old period ages out of retention.
-- **Replication factor exceeds healthy ingester count**: writes return `at least N live replicas required`. Match RF to ingester count (1 ingester → RF 1, 3 ingesters → RF 3) and use PDBs + topology spread so a rolling node upgrade can't take more than one ingester down.
-- **`Cannot run Scalable targets without an object storage backend`**: SimpleScalable and Distributed need shared object storage. Filesystem is dev-only.
-- **memcached chunk/results caches default to absurd sizes.** The `grafana/loki` chart ships `chunksCache.allocatedMemory: 8192` and `resultsCache.allocatedMemory: 1024` (MB). That number is *both* memcached's `-m` flag *and* the pod's memory request **and** limit, computed as `allocatedMemory × 1.2` Mi — so the chunk cache alone reserves `8192 × 1.2 = 9830Mi` and the two caches together pin **~11Gi per cluster**, scheduled whether or not your log volume justifies it. On a single-binary / home-scale deployment this is routinely the single largest memory reservation in the namespace, and because the cache pods are BestEffort-adjacent giants they're the first thing to block scheduling or evict neighbours (verified in the field: a 16Gi worker sitting at 89% MEM requests was almost entirely this one pod). Right-size to the working set — `chunksCache.allocatedMemory: 1024` + `resultsCache.allocatedMemory: 256` covers < ~50 GB/day and drops the footprint to ~1.5Gi. These keys deep-merge under `helm upgrade --reuse-values -f`, so the fix is a two-line values overlay; the StatefulSet's memcached `-m` and `resources` both move together. Set `enabled: false` only if you can tolerate cold object-storage reads on every query.
-
-#### 2c. Integration
-
-Loki rarely fails in isolation. Misalignment with Grafana, Promtail/Alloy, OTel, or Kubernetes networking presents as "missing data" rather than a clean error.
-
-- **Grafana "No data"** with healthy querier: check time range, datasource URL (cluster-internal vs external), and `X-Scope-OrgID` header on multi-tenant clusters. The querier logs will show the query was received and returned 0 rows — that's the proof it's not a Loki problem.
-- **OTel structured metadata rejected**: Loki < 3.0 requires `limits_config.allow_structured_metadata: true` AND schema `v13`. Always use the otlphttp exporter, never the legacy `loki` exporter (it appends `/v1/logs` incorrectly).
-- **OTel `endpoint` misuse**: setting `endpoint: http://loki/loki/api/v1/push` makes the exporter append `/v1/logs` and you get a 404. Set `endpoint: http://loki/otlp` and let the exporter append, or use `logs_endpoint:` to override with the full path.
-- **Memberlist DNS failures on startup**: confirm the service is headless (`clusterIP: None`) and that UDP+TCP 7946 is open in any NetworkPolicy. The chart ships a working memberlist Service — don't hand-write `join_members`.
-- **NetworkPolicy blocking gossip/HTTP/gRPC**: bundle an `allow-loki-intracluster` policy permitting 7946, 3100, and 9095 between pods labeled `app.kubernetes.io/name: loki`.
-
-#### 2d. Query performance
-
-The read path is bound by index lookups, chunk decode, and querier parallelism. Slow queries are nearly always a label-cardinality or time-range-vs-shard interaction.
-
-- **"too many outstanding requests"**: raise `query_scheduler.max_outstanding_requests_per_tenant` and `frontend.max_outstanding_per_tenant` together (both default 100). Enable `query_range.parallelise_shardable_queries: true`. Capacity formula: `max_outstanding >= panels × time_window/split × shards × users`.
-- **"query length too large"**: narrow stream selectors first (moving `{namespace="prod"}` → `{namespace="prod", app="frontend"}` typically cuts bytes 10–100×). Tune `split_queries_by_interval: 15m`. Only then raise `max_query_length` and `max_querier_bytes_read`.
-- **High-cardinality explosion**: `loki_ingester_memory_streams` climbs without log volume rising. Run `logcli series --analyze-labels` and you'll find a label with thousands of values. Drop it at the agent, restart ingesters to release dead streams.
-- **Expensive regex**: replace `{app="x"} |~ ".*error.*"` with `{app="x"} |= "error"` — substring is much faster than regex. Put the cheapest filter first; LogQL evaluates left-to-right. Enable `query_range.results_cache` for repeat dashboards.
-
-#### 2e. Storage backend
-
-Object storage failures are insidious — the write side rarely surfaces them quickly. Chunks land in the WAL, the ingester thinks all is well, then flushing fails 30 minutes later.
-
-- **S3 `WebIdentityErr` / IRSA failure**: confirm the service-account annotation, the trust policy's `system:serviceaccount:<ns>:<sa>` exactly matches, and the OIDC issuer URL matches AWS EKS's current value. Codify IRSA in Terraform next to the chart.
-- **S3 lifecycle deleting active chunks**: Loki owns retention through the compactor, not S3 lifecycle rules. Audit `aws s3api get-bucket-lifecycle-configuration` and disable any rule shorter than `retention_period + 7d`. Already-deleted chunks are unrecoverable.
-- **Compactor stuck**: requires `delete_request_store`, `working_directory` writable (use a PVC so marker files survive restart), index period 24h, exactly 1 replica. Alert on `time() - loki_compactor_apply_retention_last_successful_run_timestamp_seconds > 3600`.
-- **`context deadline exceeded` on object storage**: check S3 for `503 SlowDown`, add a memcached chunk cache, confirm Loki and bucket are in the same region (cross-region multiplies latency 5–10×).
-- **Index gateway slow**: run as StatefulSet + PVC so the local index cache survives restarts; target > 90% cache hit ratio via `loki_index_gateway_cache_hits_total`.
-
-#### 2f. High availability
-
-HA in Loki is a write-quorum game: ring health, RF math, and rolling upgrades that don't break either.
-
-- **"too many unhealthy instances"**: ingester exited ungracefully (OOMKill, node loss, SIGKILL on drain). Go to `/ring` and click "Forget" for each UNHEALTHY entry (or POST `/ring?forget=<instance_id>`). Set `terminationGracePeriodSeconds: ≥ 600` and a PreStop hook calling `/ingester/shutdown`.
-- **Rolling upgrade across schema boundary**: schema bumps and binary upgrades must be two separate releases, 48h apart. Pre-flight with `loki -verify-config` for both versions.
-- **Compactor singleton conflict**: `compactor.replicas: 1`, PDB `minAvailable: 0`. Never run a compactor in two clusters against the same bucket.
-- **Ruler HA**: enable ring-based sharding (`ruler.ring.kvstore.store: memberlist`, `ruler.enable_sharding: true`). Alert on `loki_ruler_rule_evaluation_failures_total > 0` and `time() - loki_ruler_last_evaluation_timestamp_seconds > 300`.
-- **Memberlist IP reuse / ghost members**: set distinct `memberlist.cluster_label` per Loki cluster — gossip is rejected from mismatched labels.
-- **Inconsistent reads after partial ingester loss**: do NOT forget an ingester until it has flushed (`/ingester/flush_handler`). If the PVC survives, spin up a replacement pod with the same PVC and let it replay the WAL.
+- **Ingestion (write path)** — 4xx on `/loki/api/v1/push`, `loki_discarded_samples_total{reason}` climbing; fix the label set before raising per-stream limits, persist Promtail positions, unstick WAL replay.
+- **Deployment & configuration** — CrashLoopBackOff, Helm single-vs-scalable mode collision, 24h schema period, RF-vs-ingester-count math, missing object-storage backend.
+- **Integration** — Grafana "No data" with a healthy querier, OTel `endpoint` 404s / structured-metadata rejections, memberlist DNS, NetworkPolicy gaps on 7946/3100/9095.
+- **Query performance** — "too many outstanding requests", "query length too large", cardinality explosions, expensive `|~` regex before a `|=` filter.
+- **Storage backend** — S3 `WebIdentityErr`/IRSA, S3 lifecycle deleting live chunks, stuck/duplicate compactor, cross-region latency.
+- **High availability** — UNHEALTHY ring entries after node loss, schema-boundary rolling upgrades, compactor singleton conflict, ruler HA, flush-before-forget.
 
 ### 3. Label design is the load-bearing decision
 
@@ -205,7 +114,7 @@ Scrape Loki's own `/metrics` into the same Prometheus that scrapes the apps it i
 
 ## Most common pitfalls (top P1 hit list)
 
-The eight things that take down clusters most often. Memorize these — they cover the bulk of real incidents.
+The seven things that take down clusters most often. Memorize these — they cover the bulk of real incidents.
 
 1. **Helm chart deployment-mode collision** — `singleBinary` and `simple-scalable` replicas both set; install hard-fails. Pick one.
 2. **Schema period not 24h** on TSDB / modern boltdb-shipper — Loki refuses to start.
@@ -214,45 +123,10 @@ The eight things that take down clusters most often. Memorize these — they cov
 5. **IRSA / Workload Identity misconfigured** — chunks never flush; WAL fills; ingester eventually OOMs.
 6. **High-cardinality label leaks** — request ID, trace ID, or full URL added as a label. Streams explode, queries melt.
 7. **Compactor not actually running** (or running as two replicas) — retention silently broken.
-8. **memcached cache `allocatedMemory` left at chart defaults** — `chunksCache` (8192) + `resultsCache` (1024) reserve ~11Gi *per cluster* regardless of log volume (request/limit = `allocatedMemory × 1.2` Mi). Not an outage, but the namespace's biggest memory hog — blocks scheduling and is first to evict neighbours. Right-size to the working set (1024 / 256).
 
 ## Diagnostic command cheatsheet
 
-The 10 highest-value commands for triage. Save these — they cover ~80% of incident first-response.
-
-```bash
-# 1. Discarded samples broken down by reason — the single most useful query
-curl -s http://loki:3100/metrics \
-  | grep '^loki_discarded_samples_total' \
-  | sort -k 2 -n -r | head
-
-# 2. Ring health (any of: ingester, ruler, scheduler, index-gateway, compactor)
-curl -s http://loki:3100/ring | grep -E "ACTIVE|LEAVING|UNHEALTHY"
-
-# 3. Current effective config (Loki dumps the resolved YAML)
-curl -s http://loki:3100/config
-
-# 4. Runtime overrides (per-tenant limits hot-reloaded)
-curl -s http://loki:3100/runtime_config
-
-# 5. Service status — which modules booted, which are degraded
-curl -s http://loki:3100/services
-
-# 6. Per-tenant analyze — find the high-cardinality label
-logcli series '{tenant="foo"}' --analyze-labels --since=1h
-
-# 7. Memberlist members — detect ghosts / IP reuse
-curl -s http://loki:3100/memberlist
-
-# 8. Force a flush before draining an ingester (must hit the pod, not svc)
-curl -s -X POST http://<ingester-pod-ip>:3100/ingester/flush_handler
-
-# 9. Graceful shutdown — flushes WAL, leaves ring cleanly
-curl -s -X POST http://<ingester-pod-ip>:3100/ingester/shutdown
-
-# 10. CPU profile during a slow-query incident (30s)
-curl -s "http://loki:3100/debug/pprof/profile?seconds=30" > loki-cpu.pprof
-```
+The 10 highest-value triage commands — discards-by-reason, ring health, resolved config, runtime overrides, service status, `--analyze-labels`, memberlist, ingester flush/shutdown, and a CPU pprof — live in **[references/command-reference.md](references/command-reference.md#diagnostic-command-cheatsheet)**. They cover ~80% of incident first-response.
 
 ## Example prompts
 

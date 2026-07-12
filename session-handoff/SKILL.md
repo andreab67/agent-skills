@@ -115,36 +115,7 @@ Always surface for explicit review (regardless of count):
 
 ### 5. Format each entry
 
-Frontmatter is non-negotiable — the auto-memory system parses it:
-
-```markdown
----
-name: {{short-kebab-case-slug}}
-description: {{one specific line — what future-you uses to judge relevance}}
-metadata:
-  type: {{user | feedback | project | reference}}
----
-
-{{body}}
-```
-
-**Tagging convention.** The `name:` slug is the tag. Use these prefixes consistently — they sort naturally in the index and make `[[links]]` unambiguous:
-
-| Prefix | Use for | Example |
-| --- | --- | --- |
-| `user_` | User role, environment, expertise | `user_role_sre_lead` |
-| `feedback_` | Working rules, corrections, validated approaches | `feedback_no_inline_styles` |
-| `project_` | Goals, scope, deadlines, decisions, pending work | `project_q2_migration_scope` |
-| `reference_` | External system locations | `reference_grafana_oncall_board` |
-
-**Body structure differs by type:**
-
-- `user` / `reference`: prose, 1–4 sentences. Lead with the fact. Done.
-- `feedback` / `project`: lead with the rule/fact in one sentence, then on a new line:
-  - `**Why:**` — the reason the user gave (past incident, constraint, stakeholder ask). This is what lets future-you judge edge cases instead of blindly following the rule.
-  - `**How to apply:**` — when/where this kicks in.
-
-Link related entries with `[[other-name]]` — the slug, no path, no extension. A `[[link]]` to a name that doesn't exist yet is fine; it marks something worth writing later.
+Follow the full spec in **[references/entry-format.md](references/entry-format.md)**: the parsed frontmatter template, the `name:` tag-prefix convention (`user_` / `feedback_` / `project_` / `reference_`), the by-type body structure (`feedback`/`project` lead with the fact then `**Why:**` + `**How to apply:**`), `[[wiki-link]]` slugs, and the under-150-words budget.
 
 ### 6. Resolve conflicts with existing entries
 
@@ -187,6 +158,14 @@ Safe to /clear now.
 
 If the optional hook is active, the user will need to re-type `/clear` — the hook lets it through on the second attempt.
 
+## Error Handling
+
+- **`MEMORY.md` doesn't exist yet** (first run for this project) — Detect: the file isn't found at the expected path. Recovery: treat it as an empty index — there's nothing to reuse or conflict with — and create the memory directory + `MEMORY.md` fresh when writing entries, rather than blocking on its absence.
+- **User doesn't respond to the review step** (walks away mid-`AskUserQuestion`, or the conversation ends before they answer) — Detect: no approval received. Recovery: write nothing. Approval is required per entry — don't fall back to saving the keep list unattended just because the session is ending.
+- **Writing a memory file or updating `MEMORY.md` fails** (permission denied, disk full, path unwritable) — Detect: the write errors. Recovery: tell the user the save failed and why — don't send the "Safe to /clear now" confirmation if the write didn't actually happen, since that would lose the context for real.
+- **`MEMORY.md` changed since the pre-flight read** (a concurrent session wrote to it) — Detect: the file's content at write-time doesn't match what was read in Step 1. Recovery: re-read before appending rather than blindly overwriting — merge in the new line instead of clobbering another session's entries.
+- **The `/clear` hook's state file is corrupted** (distinct from the `node`-not-on-PATH case already covered above) — Detect: the hook errors parsing `session-handoff-armed.json` instead of cleanly blocking or passing through. Recovery: delete the state file (`rm ~/.claude/state/session-handoff-armed.json`) and let the next `/clear` re-arm cleanly — the file has no value once corrupted.
+
 ## Anti-patterns: what looks like rescuable context but isn't
 
 A senior engineer would refuse all of these even if asked nicely. Internalize them.
@@ -201,41 +180,7 @@ A senior engineer would refuse all of these even if asked nicely. Internalize th
 
 ## Worked example
 
-Session: 90-minute design discussion about migrating a service from EC2 to ECS. User is the platform lead. The session produced a 4-file diff (Terraform module + Dockerfile + IAM policy), a draft PR description, and a verbal agreement on rollout sequencing.
-
-**Scan produces 11 candidates.** Triage:
-
-| # | Candidate | Decision | Reason |
-| --- | --- | --- | --- |
-| 1 | "User is the platform lead, owns ECS migration" | **Keep** as `user_role_platform_lead` | Durable user fact; not in repo. |
-| 2 | "Service runs on ECS Fargate, not EC2" | Drop | In the Terraform diff. Rescue test fails. |
-| 3 | "Migration deadline is end of Q2" | **Keep** as `project_ecs_migration_q2_deadline` | Not in repo; concrete date; high cost if forgotten. |
-| 4 | "User prefers Terraform over CDK because team knows HCL" | **Keep** as `feedback_prefer_terraform_for_iac` | Validated approach with reasoning; applies to future IaC decisions. |
-| 5 | "We agreed to deploy to staging first, prod on the following Tuesday" | **Keep** as `project_ecs_rollout_2026_05_27` | Agreed sequenced plan; date converted from "next Tuesday" to absolute. |
-| 6 | "The bug where the health check returned 503 was a missing IAM permission" | Drop | Bug fixed in this session, fix is in the IAM policy diff, why is in the commit. |
-| 7 | "User mentioned Datadog dashboard `dash/abc123` is the canonical service view" | **Keep** as `reference_datadog_service_dash` | External system pointer; not in repo. |
-| 8 | "User said 'no inline styles' in the dashboard repo we'll touch next" | Drop | Wrong scope — that rule belongs in that repo's memory, not this one. Flag for the user. |
-| 9 | "The legal team flagged session token storage as the driver for the migration" | **Keep** as `project_ecs_migration_driver_legal` | Non-obvious motivation; future scope decisions should favor compliance. |
-| 10 | "We considered using App Runner but ruled it out for VPC reasons" | Drop | Document in the PR description (which is being written). Memory would be a stale duplicate. |
-| 11 | "The AWS account ID is 625000724342" | Drop | Account ID is in `terraform.tfvars`. Repo wins. |
-
-**6 keep, 5 drop.** Show this exact table to the user via the > 4 flow, get approval, write 6 files + 6 `MEMORY.md` lines, confirm:
-
-```text
-Saved 6 entries to ~/.claude/projects/c--Users-andreab-platform-svc/memory/:
-  - user_role_platform_lead (user) — owns ECS migration
-  - project_ecs_migration_q2_deadline (project) — end of Q2 2026
-  - feedback_prefer_terraform_for_iac (feedback) — team knows HCL, not TS
-  - project_ecs_rollout_2026_05_27 (project) — staging then prod 2026-05-27
-  - reference_datadog_service_dash (reference) — dash/abc123
-  - project_ecs_migration_driver_legal (project) — compliance, not tech debt
-Updated 0 existing.
-Skipped 5 candidates: 2 in repo, 1 fixed bug, 1 wrong repo (flagged), 1 in PR description.
-
-Safe to /clear now.
-```
-
-That's the bar. If your output looks meaningfully different from this for a comparable session, re-read the rescue test.
+A full worked triage — a 90-minute EC2→ECS migration session scanned into 11 candidates, triaged to 6 keeps / 5 drops with per-candidate reasoning and the final confirmation message — is in **[references/worked-example.md](references/worked-example.md)**. That's the bar; if your output looks meaningfully different for a comparable session, re-read the rescue test.
 
 ## Output discipline
 
@@ -259,76 +204,7 @@ That's the bar. If your output looks meaningfully different from this for a comp
 
 ## Appendix A: optional hook for automatic activation on `/clear`
 
-Skip this if you're happy invoking the skill manually. The hook exists for users who want `/clear` to be the trigger itself.
-
-Claude Code's `/clear` is a built-in that wipes the conversation. A skill cannot intercept it after the fact. The workaround is a `UserPromptSubmit` hook that blocks the *first* `/clear` in a session, injects a routing reason, and lets the *second* `/clear` through.
-
-Add to `~/.claude/settings.json` (user-scope) or `.claude/settings.json` (project-scope):
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "matcher": "^/clear\\s*$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ~/.claude/hooks/session-handoff-gate.js"
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-Then create `~/.claude/hooks/session-handoff-gate.js` (also shipped in this skill directory as `hooks/session-handoff-gate.js`):
-
-```javascript
-#!/usr/bin/env node
-// Intercepts the first /clear in a session. Lets the second through so the
-// user can actually clear after session-handoff finishes.
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-
-const STATE_DIR = path.join(os.homedir(), '.claude', 'state');
-const STATE_FILE = path.join(STATE_DIR, 'session-handoff-armed.json');
-
-let input = '';
-process.stdin.on('data', c => input += c);
-process.stdin.on('end', () => {
-  let payload;
-  try { payload = JSON.parse(input); } catch { process.exit(0); }
-  const sessionId = payload.session_id || 'unknown';
-
-  fs.mkdirSync(STATE_DIR, { recursive: true });
-  let state = {};
-  try { state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch {}
-
-  if (state[sessionId] === 'armed') {
-    delete state[sessionId];
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state));
-    process.exit(0); // let /clear through
-  }
-
-  state[sessionId] = 'armed';
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state));
-
-  console.error(JSON.stringify({
-    decision: 'block',
-    reason: 'Run the session-handoff skill first to preserve critical context. After it confirms, re-type /clear to proceed.'
-  }));
-  process.exit(2);
-});
-```
-
-Make it executable: `chmod +x ~/.claude/hooks/session-handoff-gate.js`. On Windows, ensure `node` is on PATH; otherwise wrap with a `.cmd` shim.
-
-How it works: first `/clear` is blocked and the agent sees the routing reason → runs `session-handoff` → confirms saved → user re-types `/clear` → hook sees the session is already armed, lets it through, clears its state.
-
-To disarm without saving (you really do want to nuke the context): `rm ~/.claude/state/session-handoff-armed.json` and re-type `/clear`.
+Skip this if you're happy invoking the skill manually. For users who want `/clear` itself to be the trigger, **[references/clear-hook.md](references/clear-hook.md)** has the full setup: the `UserPromptSubmit` matcher config, the `session-handoff-gate.js` script (blocks the first `/clear`, lets the second through — also shipped in this skill dir as `hooks/session-handoff-gate.js`), and how to disarm it.
 
 ## Related skills
 

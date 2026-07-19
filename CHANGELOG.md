@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.7 — 2026-07-19
+
+New `code-review` skill — the canonical adversarially-verified code-review workflow, ported into the catalog.
+
+### New skill — `code-review`
+
+- **`code-review`** — a portable, adversarially-verified multi-angle code review. Phase 1 fans **ten angles** (five bug lenses: line-by-line, removed-behavior, cross-file tracer, language-pitfall, wrapper/proxy correctness; five quality lenses: reuse, simplification, efficiency, altitude, conventions) out to the cheapest capable subagent tier as **candidates, not verdicts**. Phase 2 verifies each candidate with a skeptic briefed to *refute* it (auto-refuting pre-existing issues, linter-catchable items, intentional supported changes, and silenced rules). Phase 3 sweeps for coverage gaps. The report is severity-ranked (critical → major → minor), confirmed findings only, each with `file:line` and a concrete failure scenario — and "No confirmed findings" is a valid, complete result.
+- Host-portability reference (`references/hosts.md`): subagent mechanics for Claude Code, hermes-agent (`delegate_task`), Kilo Code (`new_task`), and Codex CLI; no-subagent hosts (Cursor, AnythingLLM) run the ten angles as strict **sequential focused passes**.
+
 ## v1.6 — 2026-07-08
 
 Quality-bar sync from the ai-optimization skill dashboard's automated rubric pass — Error Handling sections across 5 skills, plus a real script extraction for `confluence-to-nextjs`.

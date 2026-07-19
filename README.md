@@ -24,6 +24,7 @@ Personal collection of [agent skills](https://skills.sh/) for use with Claude Co
 | [`kilo-gateway`](./kilo-gateway/SKILL.md) | [docs](./docs/kilo-gateway.md) | Kilo.ai OpenAI-compatible gateway over 500+ models: `base_url="https://api.kilo.ai/api/gateway"`, BYOK setup (zero Kilo markup), `provider/model-name` routing format, Python/TypeScript/cURL/LangChain patterns, prompt-cache header, and free-model `:free` suffix. |
 | [`openrouter`](./openrouter/SKILL.md) | [docs](./docs/openrouter.md) | OpenRouter unified API over 300+ models: OpenAI-compatible chat/streaming/JSON-mode, model fallbacks and `openrouter/auto` routing, sampling-parameter guide, plus account/analytics endpoints for dashboards — `/credits`, `/keys`, `/activity` (management-key-only, last-30-completed-UTC-days lag), beta `/analytics/query`, and the `/models` pricing catalog (full field reference). |
 | [`magnific`](./magnific/SKILL.md) | [docs](./docs/magnific.md) | Magnific generative-media API (`api.magnific.com`, part of Freepik): the submit→`task_id`→poll-or-webhook async task model, `x-magnific-api-key` auth, and Svix-style HMAC webhook verification — across ~60 endpoints. Image generation (Mystic, Flux ×7, Seedream, Z-Image, Runway), the flagship Creative/Precision **upscalers** plus relight/style-transfer/remove-bg/expand, video (Kling, MiniMax, WAN, Runway, LTX, Seedance, PixVerse, OmniHuman, VFX), audio (music/SFX/isolation), and team analytics + stock (icons/videos/templates). Full per-endpoint catalog in `references/`, rate limits, credit pricing, and the MCP server. |
+| [`code-review`](./code-review/SKILL.md) | [docs](./docs/code-review.md) | Adversarially-verified multi-angle code review: ten angles (five bug-hunting, five quality) fanned to cheap subagents, every candidate finding refuted against the actual code, a coverage-gap sweep, and a severity-ranked report of confirmed findings only — each with `file:line` and a concrete failure scenario. "No confirmed findings" is a valid result. Portable across Claude Code, hermes-agent, Kilo Code, and Codex; no-subagent hosts (Cursor/AnythingLLM) run the angles as sequential focused passes. Host mechanics in `references/`. |
 
 ## Install
 
@@ -44,12 +45,13 @@ npx skills add andreab67/agent-skills@openai-sdk -g -y
 npx skills add andreab67/agent-skills@kilo-gateway -g -y
 npx skills add andreab67/agent-skills@openrouter -g -y
 npx skills add andreab67/agent-skills@magnific -g -y
+npx skills add andreab67/agent-skills@code-review -g -y
 ```
 
 Or install all skills at once:
 
 ```bash
-for skill in postgres-ops nextjs-monorepo-ci k8s-nextjs-deploy confluence-to-nextjs ubuntu24-stig login-gov arcgis-enterprise-k8s loki-best-practices session-handoff anthropic-sdk openai-sdk kilo-gateway openrouter magnific; do
+for skill in postgres-ops nextjs-monorepo-ci k8s-nextjs-deploy confluence-to-nextjs ubuntu24-stig login-gov arcgis-enterprise-k8s loki-best-practices session-handoff anthropic-sdk openai-sdk kilo-gateway openrouter magnific code-review; do
   npx skills add "andreab67/agent-skills@$skill" -g -y
 done
 ```

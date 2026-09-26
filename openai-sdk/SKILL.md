@@ -144,7 +144,10 @@ print(f"Token count: {len(tokens)}")
 
 # Estimate for a message list
 def count_message_tokens(messages: list[dict], model: str = "gpt-4o") -> int:
-    enc = tiktoken.encoding_for_model(model)
+    try:
+        enc = tiktoken.encoding_for_model(model)
+    except KeyError:  # model newer than your tiktoken (e.g. gpt-6-*): o200k_base is the current family
+        enc = tiktoken.get_encoding("o200k_base")
     total = 3  # reply priming
     for m in messages:
         total += 4  # per-message overhead
@@ -228,7 +231,7 @@ These all look reasonable but will silently fail or waste money:
 2. **Using `response_format={"type": "json_object"}` without the word "JSON" in the messages** — the API raises a 400; you must include "JSON" (case-insensitive) somewhere in your system or user message.
 3. **Omitting the assistant tool-call message before the tool result** — when appending the conversation after a tool call, you must include `response.choices[0].message` (the assistant turn) before the `{"role": "tool", ...}` entry; skipping it causes a 400.
 4. **Embedding batch size too large** — the embeddings API accepts up to 2048 inputs per call; passing a larger list errors silently in some SDK versions and hard-errors in others. Chunk at ≤2048.
-5. **Using `tiktoken` on o1/o3/o4-mini/gpt-5 without checking your tiktoken version** — `tiktoken>=0.9.0` maps o1, o3 (and o4-mini, gpt-5) to the `o200k_base` encoding, so `encoding_for_model()` works. On older `tiktoken`, `encoding_for_model("o3")` still raises `KeyError` — fall back to `tiktoken.get_encoding("o200k_base")` directly. Either way, reasoning tokens are billed but never shown in the response, so a pre-flight tiktoken count is only a **lower bound** on actual billed tokens for these models.
+5. **Calling `tiktoken.encoding_for_model()` without a fallback** — it raises `KeyError` for any model newer than your installed tiktoken: o1/o3 need `tiktoken>=0.9.0`, o4-mini `>=0.10.0`, gpt-5 `>=0.11.0`, and no release maps `gpt-6-*` yet. Catch `KeyError` and use `tiktoken.get_encoding("o200k_base")` (as `count_message_tokens()` above does). Either way, reasoning tokens are billed but never shown in the response, so a pre-flight tiktoken count is only a **lower bound** on actual billed tokens for these models.
 6. **Not checking `finish_reason` before accessing `tool_calls`** — if `finish_reason` is `"length"` instead of `"tool_calls"`, `message.tool_calls` is `None` and your code crashes.
 7. **Streaming with structured JSON mode** — `stream=True` and `response_format={"type":"json_object"}` together give you fragmented JSON chunks; you must buffer the full stream before `json.loads()`.
 
@@ -311,7 +314,7 @@ if response.choices[0].finish_reason == "tool_calls":
 ## Best Practices
 
 1. **Always set `max_tokens`** — default is unlimited and expensive
-2. **Use gpt-4o-mini** for anything that doesn't need GPT-4o quality; it's 32× cheaper
+2. **Use gpt-6-luna** (or legacy gpt-4o-mini) for high-volume work that doesn't need a flagship model; it's ~20× cheaper than gpt-6-sol
 3. **Count tokens before the call** using tiktoken for batch cost prediction
 4. **Use `seed`** for reproducible outputs in tests
 5. **Temperature 0.0** for code generation; skip temperature for o1/o3 (they ignore it)

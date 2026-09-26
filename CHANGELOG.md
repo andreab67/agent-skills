@@ -10,13 +10,13 @@ Full-codebase review and fix pass. Report: [`docs/code-review/full-codebase-revi
 
 ### Safety and correctness fixes
 
-- **`ubuntu24-stig`** — the remediation script enabled UFW with no SSH allow rule (new SSH connections refused → remote lockout); it now allows the effective sshd port(s) first. `pam_faillock` is now actually wired into `common-auth`/`common-account` (noble ships no pam-auth-update profile, so `faillock.conf` alone was inert). A failed `apt-get install` now aborts instead of reporting success.
+- **`ubuntu24-stig`** — the remediation script enabled UFW with no SSH allow rule (new SSH connections refused → remote lockout); it now allows the effective sshd port(s) first. `pam_faillock` is now actually wired into `common-auth`/`common-account` (noble ships no pam-auth-update profile, so `faillock.conf` alone was inert). A failed `apt-get install` now aborts instead of reporting success. The SKILL.md UFW snippet uses the same SSH-port detection as the script (`sshd -T` ports + `ssh.socket` listeners).
 - **`session-handoff`** — the `/clear` gate hook fired on every prompt (`UserPromptSubmit` ignores matchers) and blocked every other prompt; it now filters on `/clear` itself and uses the documented stdout block contract.
 - **`confluence-to-nextjs`** — `dedupeSlugs` could emit duplicate anchor ids; non-ASCII headings produced empty ids; `fetch-page.sh` failed silently on network errors and exposed the API token in `ps`. Scripts are now executable and invoked from the skill directory.
 - **`messages-api-sdk` / `openai-sdk`** — model tables, prices and `estimate_cost()` helpers updated to the 2026-09 lineups (several prices were 2–3x off; the Haiku ID the table recommended crashed the helper). `count_tokens` is documented as an API request. tiktoken o1/o3 note corrected.
 - **`openrouter`** — removed ~310 KB of scraped 404 pages that were advertised as the model reference; TypeScript fallback sample now compiles against openai-node.
 - **`magnific`** — `wait()` no longer crashes on unwrapped (Style Transfer) responses; webhook verifiers reject stale timestamps (replay).
-- **`nextjs-monorepo-ci`** — `.kaniko_package` now actually runs the Kaniko executor.
+- **`nextjs-monorepo-ci`** — obfuscation actually runs now: the unescaped `find -path "*[turbopack]*"` exclusion is a glob character class that excluded every file, so pipelines built from the old template passed while shipping **unobfuscated** output. `.app_obfuscate` now re-publishes its output as artifacts and is gated on `main` like its neighbours, and `.kaniko_package` now actually runs the Kaniko executor (it previously had no `script:`).
 - **`login-gov`** — `verified_at` requires the `profile:verified_at` scope.
 - **`k8s-nextjs-deploy`** — namespace recovery recreates secrets before workloads.
 - **Frontmatter** — `magnific` and `postgres-ops` descriptions cut below the 1024-char spec limit; SDK/gateway descriptions now say when and when not to trigger.

@@ -21,7 +21,7 @@ Transforms Claude into a Postgres SRE: rather than generic SQL help, you get hyp
 | **Incident diagnosis** | Ready-to-run queries for pg_stat_activity, blocking chains, pg_stat_statements top queries, bloat/vacuum status, replication lag |
 | **Query plan analysis** | EXPLAIN ANALYZE interpretation: row-estimate vs actual mismatch, dominant cost node, buffer cache hit rate, index/rewrite/partitioning recommendations |
 | **HA / DR design** | Streaming and logical replication, Patroni, pgBackRest, WAL-G, PITR planning, RTO/RPO validation |
-| **Schema migrations** | Forward + rollback DDL, table-rewrite detection, expand-contract zero-downtime patterns, EF Core / Alembic / Flyway / Flyway / raw SQL |
+| **Schema migrations** | Forward + rollback DDL, table-rewrite detection, expand-contract zero-downtime patterns, EF Core / Alembic / Flyway / raw SQL |
 | **Major version upgrades** | pg_upgrade (in-place) vs logical replication cutover comparison, extension compatibility check |
 | **Connection pooling** | pgBouncer transaction-mode math, RDS Proxy, PgCat, prepared-statement caveats |
 | **Security & compliance** | Role design, RLS, pgaudit, TLS enforcement, STIG/SRG line-item guidance, CIS benchmark gaps |
@@ -38,7 +38,7 @@ Transforms Claude into a Postgres SRE: rather than generic SQL help, you get hyp
 
 ## What it won't do
 
-- Scaffold new CRUD features — use `nextjs-react-postgres-builder` for that
+- Scaffold new CRUD features — use a dedicated app-scaffolding skill (not part of this catalog)
 - Answer generic SQL language questions with no operational context (e.g., "what does LATERAL do")
 - Cover other database engines (MySQL, SQL Server, Cosmos DB)
 

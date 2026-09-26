@@ -1,13 +1,13 @@
-# anthropic-sdk
+# messages-api-sdk
 
-[![View on skills.sh](https://img.shields.io/badge/skills.sh-anthropic--sdk-blue)](https://skills.sh/andreab67/agent-skills/anthropic-sdk)
+[![View on skills.sh](https://img.shields.io/badge/skills.sh-messages--api--sdk-blue)](https://skills.sh/andreab67/agent-skills/messages-api-sdk)
 
 Expert assistance with the Anthropic Python SDK (`anthropic` package) — Messages API, tool use, streaming, prompt caching, cost estimation, and Claude model selection.
 
 ## Install
 
 ```bash
-npx skills add andreab67/agent-skills@anthropic-sdk -g -y
+npx skills add andreab67/agent-skills@messages-api-sdk -g -y
 ```
 
 ## What it does

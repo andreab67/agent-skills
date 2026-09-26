@@ -1,5 +1,5 @@
 ---
-name: anthropic-sdk
+name: messages-api-sdk
 description: "Expert help with the Anthropic Python SDK (anthropic package) and Claude API: Messages API calls, tool use / function calling, streaming, prompt caching, count_tokens pre-flight checks, vision input, cost estimation, and model selection (Sonnet 5, Opus 5.5, Fable 5.1, Haiku 4.5). Use when calling Claude models directly via the Anthropic API, implementing tool-use loops, streaming responses, estimating token costs before a call, choosing between current Claude models, or debugging stop_reason/usage/content-block responses. Do NOT use for Claude Code CLI configuration, the OpenAI Python SDK, or the OpenRouter/Kilo gateways - those have their own skills."
 ---
 

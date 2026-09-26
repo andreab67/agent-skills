@@ -313,5 +313,5 @@ These look like valid hardening moves but will break your instance or produce fa
 
 ## Related skills
 
-- [`postgres-ops`](./postgres-ops/SKILL.md) — STIG hardening for the PostgreSQL layer on this server
-- [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) — OS hardening context for ArcGIS worker nodes
+- [`postgres-ops`](../postgres-ops/SKILL.md) — STIG hardening for the PostgreSQL layer on this server
+- [`arcgis-enterprise-k8s`](../arcgis-enterprise-k8s/SKILL.md) — OS hardening context for ArcGIS worker nodes

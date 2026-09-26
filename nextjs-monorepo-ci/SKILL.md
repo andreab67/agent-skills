@@ -236,5 +236,5 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 
 ## Related skills
 
-- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — deploy the Docker images built by this pipeline
-- [`confluence-to-nextjs`](./confluence-to-nextjs/SKILL.md) — when adding a `kb` app to the monorepo
+- [`k8s-nextjs-deploy`](../k8s-nextjs-deploy/SKILL.md) — deploy the Docker images built by this pipeline
+- [`confluence-to-nextjs`](../confluence-to-nextjs/SKILL.md) — when adding a `kb` app to the monorepo

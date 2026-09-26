@@ -236,5 +236,5 @@ Always verify context before applying manifests or rotating secrets.
 
 ## Related skills
 
-- [`nextjs-monorepo-ci`](./nextjs-monorepo-ci/SKILL.md) — CI pipeline that builds and pushes the images this skill deploys
-- [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) — deploying a more complex stateful app on Kubernetes
+- [`nextjs-monorepo-ci`](../nextjs-monorepo-ci/SKILL.md) — CI pipeline that builds and pushes the images this skill deploys
+- [`arcgis-enterprise-k8s`](../arcgis-enterprise-k8s/SKILL.md) — deploying a more complex stateful app on Kubernetes

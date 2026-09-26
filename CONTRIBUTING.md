@@ -63,7 +63,7 @@ Mirror the structure of an existing skill (`postgres-ops` and `loki-best-practic
 3. **Instructions** — numbered sections, each with rationale (the *why*) not just rules. Heavy-handed `MUST`/`NEVER` is a yellow flag; explain the cost of getting it wrong and trust the model.
 4. **Output discipline** — what good output looks like, what to flag explicitly (destructive ops, version-specific behavior, missing context).
 5. **Example prompts** — 5–8 real things a user would actually type.
-6. **Related skills** — link to neighbors so the model knows when to hand off.
+6. **Related skills** — link to neighbors so the model knows when to hand off. Use `` [`other-skill`](../other-skill/SKILL.md) `` — the `../` form resolves both in the repo and after install (the skills CLI places each skill in a sibling directory); `./other-skill/...` resolves inside the current skill's own directory and is always broken.
 
 Keep SKILL.md under ~500 lines. If you're going over, move reference material into a `references/` subdirectory and point the model there from the main body.
 

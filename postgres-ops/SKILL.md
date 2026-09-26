@@ -157,5 +157,5 @@ Domain-specific failure modes when running the diagnostic/fix workflows above:
 
 ## Related skills
 
-- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — Kubernetes deployment patterns if Postgres runs in-cluster
-- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS-level STIG hardening for the host running Postgres
+- [`k8s-nextjs-deploy`](../k8s-nextjs-deploy/SKILL.md) — Kubernetes deployment patterns if Postgres runs in-cluster
+- [`ubuntu24-stig`](../ubuntu24-stig/SKILL.md) — OS-level STIG hardening for the host running Postgres

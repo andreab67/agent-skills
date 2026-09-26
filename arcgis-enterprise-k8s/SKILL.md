@@ -284,6 +284,6 @@ These all look reasonable for a Kubernetes ArcGIS deployment but will cause sile
 
 ## Related skills
 
-- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — general Kubernetes deployment patterns and failure diagnosis
-- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS hardening for self-managed worker nodes
-- [`login-gov`](./login-gov/SKILL.md) — federal identity integration if fronting ArcGIS with login.gov
+- [`k8s-nextjs-deploy`](../k8s-nextjs-deploy/SKILL.md) — general Kubernetes deployment patterns and failure diagnosis
+- [`ubuntu24-stig`](../ubuntu24-stig/SKILL.md) — OS hardening for self-managed worker nodes
+- [`login-gov`](../login-gov/SKILL.md) — federal identity integration if fronting ArcGIS with login.gov

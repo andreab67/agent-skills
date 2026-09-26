@@ -251,5 +251,5 @@ Response attributes depend on scopes requested:
 
 ## Related skills
 
-- [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) — if fronting ArcGIS with federal identity via login.gov
-- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS hardening for the server running the integration
+- [`arcgis-enterprise-k8s`](../arcgis-enterprise-k8s/SKILL.md) — if fronting ArcGIS with federal identity via login.gov
+- [`ubuntu24-stig`](../ubuntu24-stig/SKILL.md) — OS hardening for the server running the integration

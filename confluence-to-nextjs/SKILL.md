@@ -230,5 +230,5 @@ Realistic failure modes when running a Confluence migration, how to detect them,
 
 ## Related skills
 
-- [`nextjs-monorepo-ci`](./nextjs-monorepo-ci/SKILL.md) — add the `apps/kb` Next.js app to the CI pipeline
-- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — deploy the KB app to Kubernetes
+- [`nextjs-monorepo-ci`](../nextjs-monorepo-ci/SKILL.md) — add the `apps/kb` Next.js app to the CI pipeline
+- [`k8s-nextjs-deploy`](../k8s-nextjs-deploy/SKILL.md) — deploy the KB app to Kubernetes

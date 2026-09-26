@@ -157,6 +157,14 @@ Kaniko runs unprivileged — no DinD, no privileged pods:
       AUTH="$(printf '%s:%s' "$HARBOR_USERNAME" "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
       printf '{"auths":{"%s":{"auth":"%s"}}}' "$HARBOR_REGISTRY" "$AUTH" \
         > /kaniko/.docker/config.json
+  script:
+    # Context is the app dir: the Dockerfile below COPYs .next/standalone,
+    # .next/static and public from the (obfuscated) build artifacts.
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}/apps/${APP_NAME}"
+      --dockerfile "${CI_PROJECT_DIR}/apps/${APP_NAME}/Dockerfile"
+      --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${APP_NAME}:${CI_COMMIT_SHA}"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
 ```
@@ -211,7 +219,7 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 2. **Add validate-stage jobs** — copy `lint-web`/`test-web` as `lint-<name>`/`test-<name>`, pointing `cd apps/<name>` and using a `<name>-${CI_COMMIT_REF_SLUG}` cache key. *Success*: the new jobs appear under `validate` in the pipeline graph and pass on a trivial commit.
 3. **Extend the build stage** — add a `build-<name>` job that extends `.app_build` with `variables: { APP_NAME: <name> }`. *Success*: `apps/<name>/.next/` and `apps/<name>/public/` appear as job artifacts.
 4. **Extend the obfuscate stage** — add `obfuscate-<name>` extending `.app_obfuscate` with the same `APP_NAME`. *Success*: the resulting image boots without `ChunkLoadError` (see the Turbopack/externals exclusion above).
-5. **Extend the package stage** — add `package-<name>` extending `.kaniko_package`, pointing at `apps/<name>/Dockerfile`. *Success*: the image lands in Harbor tagged with `$CI_COMMIT_SHA`.
+5. **Extend the package stage** — add `package-<name>` extending `.kaniko_package` with `variables: { APP_NAME: <name> }` and `needs: [obfuscate-<name>]` (the template's `script:` builds `apps/<name>/Dockerfile`; `HARBOR_PROJECT` must be set as a CI/CD variable alongside `HARBOR_REGISTRY`). *Success*: the image lands in Harbor as `$HARBOR_REGISTRY/$HARBOR_PROJECT/<name>:$CI_COMMIT_SHA`.
 6. **Add the new job to `notify`'s `needs`** — append `package-<name>` to the `indexnow` job's `needs: [...]` list. *Success*: the pipeline DAG shows `notify` gated on all package jobs, including the new one.
 7. **Add the IndexNow key file** (if the app serves its own domain/subdomain) — `echo -n "YOUR_KEY" > apps/<name>/public/YOUR_KEY.txt`, and allowlist the pattern in `.gitleaks.toml` if not already covered. *Success*: `gitleaks detect` passes and the key file is served under the app's public path.
 

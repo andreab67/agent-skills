@@ -1,11 +1,11 @@
 ---
 name: k8s-nextjs-deploy
-description: Kubernetes deployment patterns for Next.js applications — Deployment/Service/Ingress manifests, Harbor image pull secrets, Traefik ingress with cert-manager TLS, Linkerd service mesh, multi-app namespaces, and K8s secret rotation. Use this skill whenever the user mentions deploying a Next.js app to Kubernetes, ImagePullBackOff, CrashLoopBackOff, Harbor pull secret, Traefik ingress, cert-manager, a missing secretKeyRef, or namespace recovery — even if they just say "the pod won't start" or "deploy this to k8s" without further detail.
+description: Kubernetes deployment patterns for Next.js applications — Deployment/Service/Ingress manifests, Harbor image pull secrets, Traefik ingress with cert-manager TLS, multi-app namespaces, and K8s secret rotation. Use this skill whenever the user mentions deploying a Next.js app to Kubernetes, ImagePullBackOff, CrashLoopBackOff, Harbor pull secret, Traefik ingress, cert-manager, a missing secretKeyRef, or namespace recovery — even if they just say "the pod won't start" or "deploy this to k8s" without further detail.
 ---
 
 # k8s-nextjs-deploy
 
-Kubernetes deployment patterns for containerized Next.js apps: Harbor registry auth, Traefik ingress with automatic TLS, Linkerd sidecar injection, and multi-app namespace management.
+Kubernetes deployment patterns for containerized Next.js apps: Harbor registry auth, Traefik ingress with automatic TLS, and multi-app namespace management.
 
 ## When to use
 
@@ -193,11 +193,13 @@ kubectl -n <ns> create secret generic my-app-secrets \
 
 ```bash
 kubectl apply -f k8s/namespace.yaml
+# Recreate the Harbor pull secret and app secrets NOW (commands above) —
+# pods created before they exist sit in ImagePullBackOff /
+# CreateContainerConfigError and then wait out kubelet back-off.
 kubectl apply -f k8s/web-deployment.yaml -f k8s/web-service.yaml
 kubectl apply -f k8s/buy-deployment.yaml -f k8s/buy-service.yaml
 kubectl apply -f k8s/kb-deployment.yaml  -f k8s/kb-service.yaml
 kubectl apply -f k8s/ingress.yaml
-# Then recreate pull secret and app secrets
 ```
 
 ## Environment variables for Next.js

@@ -12,7 +12,7 @@ npx skills add andreab67/agent-skills@k8s-nextjs-deploy -g -y
 
 ## What it does
 
-Provides ready-to-use Kubernetes manifests and operational playbooks for running Next.js apps in a cluster. The skill knows the specific failure modes that arise with Harbor pull secrets, Traefik cert-manager TLS, and Linkerd sidecar injection — and carries the exact commands and ordering needed to recover.
+Provides ready-to-use Kubernetes manifests and operational playbooks for running Next.js apps in a cluster. The skill knows the specific failure modes that arise with Harbor pull secrets and Traefik cert-manager TLS — and carries the exact commands and ordering needed to recover.
 
 ## Coverage
 
@@ -21,10 +21,9 @@ Provides ready-to-use Kubernetes manifests and operational playbooks for running
 | **Manifests** | Deployment, Service, Ingress (Traefik + cert-manager), with resource requests/limits and security context |
 | **Registry auth** | Harbor pull secret creation, rotation, and `rollout restart` after credential refresh |
 | **TLS** | Traefik `ingressClassName`, cert-manager `cluster-issuer` annotation, multi-subdomain SAN |
-| **Service mesh** | Linkerd sidecar injection via namespace annotation |
 | **Env vars** | Required Next.js standalone env (`HOSTNAME=0.0.0.0`, `NODE_ENV`, `NEXT_TELEMETRY_DISABLED`, OTel settings) |
 | **Multi-context** | `kubectl config get-contexts / use-context` for managing multiple clusters |
-| **Namespace recovery** | Full apply order when a namespace is deleted (namespace → deployments → services → ingress → secrets) |
+| **Namespace recovery** | Full apply order when a namespace is deleted (namespace → secrets (pull + app) → deployments → services → ingress) |
 
 ## Example prompts
 

@@ -1,6 +1,6 @@
 ---
 name: anthropic-sdk
-description: Anthropic Claude SDK — Messages API, tool use, streaming, cost estimation, model selection
+description: "Expert help with the Anthropic Python SDK (anthropic package) and Claude API: Messages API calls, tool use / function calling, streaming, prompt caching, count_tokens pre-flight checks, vision input, cost estimation, and model selection (Sonnet 5, Opus 5.5, Fable 5.1, Haiku 4.5). Use when calling Claude models directly via the Anthropic API, implementing tool-use loops, streaming responses, estimating token costs before a call, choosing between current Claude models, or debugging stop_reason/usage/content-block responses. Do NOT use for Claude Code CLI configuration, the OpenAI Python SDK, or the OpenRouter/Kilo gateways - those have their own skills."
 ---
 
 # Anthropic Claude SDK
@@ -13,7 +13,7 @@ Expert assistance with the Anthropic Python SDK (`anthropic` package) and Claude
 - Implementing tool use / function calling with Claude
 - Streaming responses for real-time UX
 - Estimating token costs before making a call
-- Choosing between Fable 5, Opus 4.8, Sonnet 4.6, and Haiku 4.5
+- Choosing between Fable 5.1, Opus 5.5, Sonnet 5, and Haiku 4.5
 - Setting up prompt caching for long repeated contexts
 - Debugging stop_reason, usage, and content block responses
 
@@ -42,7 +42,7 @@ import anthropic
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
 
 message = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=1024,
     system="You are a Python expert.",
     messages=[{"role": "user", "content": "Write a quicksort."}],
@@ -54,7 +54,7 @@ print(f"Tokens used: {message.usage.input_tokens} in / {message.usage.output_tok
 ### Streaming
 ```python
 with client.messages.stream(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Explain async/await"}],
 ) as stream:
@@ -81,7 +81,7 @@ tools = [
 
 messages = [{"role": "user", "content": "Show me all users created this week"}]
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=1024,
     tools=tools,
     messages=messages,
@@ -96,24 +96,25 @@ while response.stop_reason == "tool_use":
         "role": "user",
         "content": [{"type": "tool_result", "tool_use_id": tool_block.id, "content": str(result)}]
     })
-    response = client.messages.create(model="claude-sonnet-4-6", max_tokens=1024, tools=tools, messages=messages)
+    response = client.messages.create(model="claude-sonnet-5", max_tokens=1024, tools=tools, messages=messages)
 
 print(response.content[0].text)
 ```
 
-### Count Tokens (No API Call)
+### Count Tokens (pre-flight, no generation)
 ```python
 count = client.messages.count_tokens(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     messages=[{"role": "user", "content": "Your prompt here"}],
 )
 print(f"Input tokens: {count.input_tokens}")
 ```
+This is a separate API request — it POSTs to `/v1/messages/count_tokens` (network round-trip, needs your API key) and returns the token count without generating a completion.
 
 ### Prompt Caching (Long Repeated Context)
 ```python
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=1024,
     system=[{
         "type": "text",
@@ -133,7 +134,7 @@ with open("screenshot.png", "rb") as f:
     img_b64 = base64.standard_b64encode(f.read()).decode()
 
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -147,24 +148,42 @@ response = client.messages.create(
 
 ## Model Selection
 
-| Model | ID | Input $/Mtok | Output $/Mtok | Best For |
-|-------|----|-------------|--------------|----------|
-| **claude-fable-5** | `claude-fable-5` | $— | $— | Autonomous long-horizon tasks, agentic workflows |
-| **claude-opus-4-8** | `claude-opus-4-8` | $15 | $75 | Complex reasoning, architecture decisions, hard bugs |
-| **claude-sonnet-4-6** | `claude-sonnet-4-6` | $3 | $15 | General coding, PRs, code review — best value |
-| **claude-haiku-4-5** | `claude-haiku-4-5-20251001` | $0.80 | $4 | Fast completions, autocomplete, simple edits |
+| Model | ID | Input $/Mtok | Output $/Mtok | Context | Best For |
+|-------|----|-------------|--------------|---------|----------|
+| **claude-fable-5.1** | `claude-fable-5-1` | $10 | $50 | 1M | Autonomous long-horizon tasks, agentic workflows |
+| **claude-opus-5.5** | `claude-opus-5-5` | $4 | $20 | 1M | Complex reasoning, architecture decisions, hard bugs |
+| **claude-sonnet-5** | `claude-sonnet-5` | $2 | $10 | 1M | General coding, PRs, code review — best value |
+| **claude-haiku-4.5** | `claude-haiku-4-5-20251001` | $1 | $5 | 200K | Fast completions, autocomplete, simple edits (retirement not sooner than 2026-10-15) |
 
-**Coding recommendation:** Start with Sonnet 4.6. Escalate to Opus 4.8 when Sonnet fails. Use Fable 5 for multi-step agentic tasks where the agent runs autonomously.
+**Older, still-active models:**
+
+| Model | ID | Input $/Mtok | Output $/Mtok |
+|-------|----|-------------|--------------|
+| claude-opus-4.8 | `claude-opus-4-8` | $5 | $25 |
+| claude-sonnet-4.6 | `claude-sonnet-4-6` | $3 | $15 |
+| claude-fable-5 | `claude-fable-5` | $10 | $50 |
+
+**Coding recommendation:** Start with Sonnet 5 for general coding, PRs, and review. Escalate to Opus 5.5 when Sonnet 5 fails on hard reasoning or architecture problems. Use Fable 5.1 for long-horizon autonomous/agentic work. Use Haiku 4.5 for high-volume simple tasks (autocomplete, classification, linting) where cost per call dominates.
+
+> Pricing pages change — verify current numbers at https://platform.claude.com/docs/en/about-claude/pricing before quoting a price to a user.
 
 ## Cost Estimation
 
 ```python
-def estimate_cost(input_tokens: int, output_tokens: int, model: str = "claude-sonnet-4-6") -> float:
+def estimate_cost(input_tokens: int, output_tokens: int, model: str = "claude-sonnet-5") -> float:
     prices = {
-        "claude-opus-4-8":   (15.00, 75.00),
-        "claude-sonnet-4-6": (3.00,  15.00),
-        "claude-haiku-4-5":  (0.80,  4.00),
+        # current models
+        "claude-fable-5-1":            (10.00, 50.00),
+        "claude-opus-5-5":              (4.00,  20.00),
+        "claude-sonnet-5":              (2.00,  10.00),
+        "claude-haiku-4-5-20251001":    (1.00,   5.00),
+        # older, still-active models
+        "claude-opus-4-8":              (5.00,  25.00),
+        "claude-sonnet-4-6":            (3.00,  15.00),
+        "claude-fable-5":               (10.00, 50.00),
     }
+    if model not in prices:
+        raise ValueError(f"unknown model {model!r}; add it to prices")
     in_price, out_price = prices[model]
     return (input_tokens * in_price + output_tokens * out_price) / 1_000_000
 ```
@@ -241,12 +260,12 @@ messages = [{"role": "user", "content": "Show me the top 5 users by signup date 
 
 # Pre-flight: count tokens before sending
 token_count = client.messages.count_tokens(
-    model="claude-sonnet-4-6", tools=tools, messages=messages
+    model="claude-sonnet-5", tools=tools, messages=messages
 )
 print(f"Pre-flight: {token_count.input_tokens} input tokens")  # guard against runaway prompts
 
 response = client.messages.create(
-    model="claude-sonnet-4-6", max_tokens=1024, tools=tools, messages=messages
+    model="claude-sonnet-5", max_tokens=1024, tools=tools, messages=messages
 )
 
 # Tool loop — WHILE, not for
@@ -267,7 +286,7 @@ while response.stop_reason == "tool_use":
         "content": [{"type": "tool_result", "tool_use_id": tool_block.id, "content": str(result)}],
     })
     response = client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=1024, tools=tools, messages=messages
+        model="claude-sonnet-5", max_tokens=1024, tools=tools, messages=messages
     )
 
 print(response.content[0].text)
@@ -286,7 +305,7 @@ If `stop_reason` is `max_tokens` at any turn: the response was cut — increase 
 ## Best Practices
 
 1. **Always set `max_tokens`** — no default, unbounded responses are expensive
-2. **Use Sonnet 4.6** as the default; escalate to Opus 4.8 only when needed
+2. **Use Sonnet 5** as the default; escalate to Opus 5.5 only when needed
 3. **Cache system prompts** when the same large context is reused across calls
 4. **Count tokens first** (`count_tokens`) before expensive batch jobs — pass `tools=` too
 5. **Temperature 0.0–0.2** for deterministic code generation and analysis

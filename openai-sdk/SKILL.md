@@ -1,6 +1,6 @@
 ---
 name: openai-sdk
-description: OpenAI Python SDK — Chat completions, function calling, embeddings, token counting, cost estimation
+description: "Expert help with the OpenAI Python SDK (openai package): chat completions, function calling / tools, structured JSON output, embeddings, tiktoken token counting, cost estimation, and model selection (GPT-6 Sol/Luna/Astra plus legacy gpt-4o, gpt-4o-mini, o3). Use when calling OpenAI models via the Chat Completions API, implementing tool-call loops, generating embeddings, pre-flight token counting with tiktoken, or estimating request cost. Do NOT use for Azure OpenAI deployment config, the OpenRouter or Kilo gateways, or the Anthropic SDK - those have their own skills."
 ---
 
 # OpenAI SDK
@@ -9,7 +9,7 @@ Expert assistance with the OpenAI Python SDK (`openai` package). Covers chat com
 
 ## When to Use This Skill
 
-- Calling GPT-4o, GPT-4o-mini, o1, or o3 models
+- Calling GPT-6 Sol/Luna/Astra, or legacy GPT-4o, GPT-4o-mini, or o3 models
 - Implementing function calling / tools
 - Generating embeddings for semantic search
 - Counting tokens with tiktoken before making a call
@@ -157,24 +157,39 @@ def count_message_tokens(messages: list[dict], model: str = "gpt-4o") -> int:
 
 | Model | Input $/Mtok | Output $/Mtok | Context | Best For |
 |-------|-------------|--------------|---------|----------|
-| **gpt-4o** | $5 | $15 | 128K | General coding, vision, tool use |
-| **gpt-4o-mini** | $0.15 | $0.60 | 128K | High-volume, simple tasks (32× cheaper) |
-| **o1** | $15 | $60 | 200K | Complex reasoning, hard algorithms |
-| **o3** | $10 | $40 | 200K | Best reasoning, cost-efficient vs o1 |
+| **gpt-6-sol** | $2 | $10 | 1.05M | General coding, tool use — best value |
+| **gpt-6-luna** | $0.10 | $0.50 | 1.05M | High-volume, simple tasks |
+| **gpt-6-astra** | $10 | $50 | 1.05M | Complex reasoning, hardest problems |
 | **text-embedding-3-small** | $0.02 | — | 8K | Semantic search, similarity |
 
-**Coding recommendation:** GPT-4o for general tasks; o3/o1 for hard algorithmic problems; gpt-4o-mini for autocomplete/linting/classification at scale.
+**Legacy, still-active models:**
+
+| Model | Input $/Mtok | Output $/Mtok | Context | Notes |
+|-------|-------------|--------------|---------|-------|
+| gpt-4o | $2.50 | $10 | 128K | Prior-gen general/vision/tool-use model |
+| gpt-4o-mini | $0.15 | $0.60 | 128K | Prior-gen low-cost model |
+| o3 | $2 | $8 | 200K | Reasoning model; `o3-2025-04-16` snapshot shuts down 2026-12-11 |
+| o1 | $15 | $60 | 200K | Its only snapshot, `o1-2024-12-17`, shuts down 2026-10-23 — avoid for new work |
+
+**Coding recommendation:** GPT-6 Sol for general coding tasks; GPT-6 Astra for the hardest reasoning/architecture problems; GPT-6 Luna for autocomplete/linting/classification at scale. Prefer the GPT-6 line over the legacy gpt-4o/o-series models for new work — o1 is shutting down 2026-10-23.
 
 ## Cost Estimation
 
 ```python
-def estimate_cost(prompt_tokens: int, completion_tokens: int, model: str = "gpt-4o") -> float:
+def estimate_cost(prompt_tokens: int, completion_tokens: int, model: str = "gpt-6-sol") -> float:
     prices = {
-        "gpt-4o":        (5.00,  15.00),
+        # current models
+        "gpt-6-sol":     (2.00,  10.00),
+        "gpt-6-luna":    (0.10,  0.50),
+        "gpt-6-astra":   (10.00, 50.00),
+        # legacy, still-active models
+        "gpt-4o":        (2.50,  10.00),
         "gpt-4o-mini":   (0.15,  0.60),
-        "o1":            (15.00, 60.00),
-        "o3":            (10.00, 40.00),
+        "o3":            (2.00,  8.00),
+        "o1":            (15.00, 60.00),  # o1-2024-12-17 shuts down 2026-10-23
     }
+    if model not in prices:
+        raise ValueError(f"unknown model {model!r}; add it to prices")
     in_p, out_p = prices[model]
     return (prompt_tokens * in_p + completion_tokens * out_p) / 1_000_000
 ```
@@ -213,7 +228,7 @@ These all look reasonable but will silently fail or waste money:
 2. **Using `response_format={"type": "json_object"}` without the word "JSON" in the messages** — the API raises a 400; you must include "JSON" (case-insensitive) somewhere in your system or user message.
 3. **Omitting the assistant tool-call message before the tool result** — when appending the conversation after a tool call, you must include `response.choices[0].message` (the assistant turn) before the `{"role": "tool", ...}` entry; skipping it causes a 400.
 4. **Embedding batch size too large** — the embeddings API accepts up to 2048 inputs per call; passing a larger list errors silently in some SDK versions and hard-errors in others. Chunk at ≤2048.
-5. **Using `tiktoken` on o1/o3** — there is no public tiktoken encoder for reasoning models; `tiktoken.encoding_for_model("o3")` throws `KeyError`. Use `gpt-4o` encoding as an approximation and add ~10% buffer.
+5. **Using `tiktoken` on o1/o3/o4-mini/gpt-5 without checking your tiktoken version** — `tiktoken>=0.9.0` maps o1, o3 (and o4-mini, gpt-5) to the `o200k_base` encoding, so `encoding_for_model()` works. On older `tiktoken`, `encoding_for_model("o3")` still raises `KeyError` — fall back to `tiktoken.get_encoding("o200k_base")` directly. Either way, reasoning tokens are billed but never shown in the response, so a pre-flight tiktoken count is only a **lower bound** on actual billed tokens for these models.
 6. **Not checking `finish_reason` before accessing `tool_calls`** — if `finish_reason` is `"length"` instead of `"tool_calls"`, `message.tool_calls` is `None` and your code crashes.
 7. **Streaming with structured JSON mode** — `stream=True` and `response_format={"type":"json_object"}` together give you fragmented JSON chunks; you must buffer the full stream before `json.loads()`.
 

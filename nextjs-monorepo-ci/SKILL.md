@@ -137,6 +137,13 @@ Obfuscates Next.js standalone output with `javascript-obfuscator`. **Must exclud
           --self-defending false \
           --target node
       done
+  # Re-publish the obfuscated output: package jobs use `needs: [obfuscate-<name>]`,
+  # and with `needs` GitLab only downloads artifacts from the listed jobs.
+  artifacts:
+    paths:
+      - apps/${APP_NAME}/.next/
+      - apps/${APP_NAME}/public/
+    expire_in: 1 day
 ```
 
 > **Why exclude `[turbopack]*` and `[externals]*`?** These chunks contain dynamic module loaders. Obfuscating them breaks `_0x…` function references at runtime, causing `ChunkLoadError: Failed to load chunk` on the instrumentation hook.

@@ -231,7 +231,7 @@ sysctl --system
 
 ### UFW firewall (SV-270654, SV-270655)
 ```bash
-ufw allow 22/tcp          # or the port(s) from: sshd -T | awk '$1=="port"{print $2}'
+ufw allow 22/tcp          # or every port from: sshd -T | awk '$1=="listenaddress"{n=split($2,a,":");print a[n]}' | sort -u
 ufw --force enable
 ufw logging on
 ```

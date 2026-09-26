@@ -371,7 +371,13 @@ log "Enabling UFW firewall..."
 # Ubuntu's DEFAULT_INPUT_POLICY is DROP: enabling UFW without an SSH allow rule
 # refuses every NEW SSH connection (the current session survives only via
 # conntrack) — i.e. remote lockout. Allow the effective sshd port(s) first.
-SSH_PORTS=$(sshd -T 2>/dev/null | awk '$1=="port"{print $2}' || true)
+# `sshd -T` prints one `listenaddress host:port` line per effective listener,
+# which also covers ports set via `ListenAddress host:port` (a bare `port` line
+# would miss those). On socket-activated sshd (ssh.socket, default on noble) a
+# ListenStream= drop-in bypasses sshd_config, so add ssh.socket's ports too.
+SSH_PORTS=$( { sshd -T 2>/dev/null | awk '$1=="port"{print $2} $1=="listenaddress"{n=split($2,a,":"); print a[n]}'
+               systemctl show -p Listen --value ssh.socket 2>/dev/null | grep -oE ':[0-9]+ \(Stream\)' | tr -dc '0-9\n'
+             } | sort -un || true)
 [ -n "$SSH_PORTS" ] || SSH_PORTS=22
 for p in $SSH_PORTS; do
   ufw allow "${p}/tcp" > /dev/null   # idempotent: ufw skips existing rules

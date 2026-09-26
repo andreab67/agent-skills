@@ -25,7 +25,7 @@ Activates whenever you call `api.magnific.com` or work with any Magnific model. 
 | **Video** | Kling 2.1/2.5/2.6/O1/Motion-Control, MiniMax Hailuo & Live, WAN 2.5/2.6, Runway Gen4/Act-Two, LTX, Seedance, PixVerse, OmniHuman, VFX |
 | **Audio** | music generation, sound effects, audio isolation |
 | **Analytics & stock** | team credit usage/members/keys/groups/projects; stock resources, icons, videos |
-| **Webhooks** | Svix-style HMAC-SHA256 verification (`webhook-id`/`webhook-timestamp`/`webhook-signature`) — working verifier included |
+| **Webhooks** | Svix-style HMAC-SHA256 verification (`webhook-id`/`webhook-timestamp`/`webhook-signature`), with a timestamp-tolerance check (default 300s, tunable) to reject stale replayed deliveries — working verifier included |
 | **Ops** | rate limits (50 rpm), credit-based pricing notes, and the hosted MCP server (`mcp.magnific.com`, OAuth 2.0) |
 
 ## The gotchas it saves you from

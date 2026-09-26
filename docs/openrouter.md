@@ -2,7 +2,7 @@
 
 [![View on skills.sh](https://img.shields.io/badge/skills.sh-openrouter-blue)](https://skills.sh/andreab67/agent-skills/openrouter)
 
-Expert assistance with the OpenRouter API — unified access to 300+ models through one OpenAI-compatible endpoint, with intelligent routing, automatic fallbacks, and the management/analytics endpoints needed to build cost dashboards.
+Expert assistance with the OpenRouter API — unified access to hundreds of models through one OpenAI-compatible endpoint, with intelligent routing, automatic fallbacks, and the management/analytics endpoints needed to build cost dashboards.
 
 ## Install
 
@@ -18,7 +18,7 @@ Activates when calling models through OpenRouter (`https://openrouter.ai/api/v1`
 
 | Area | What you get |
 | --- | --- |
-| **Unified inference** | 300+ models via one OpenAI-compatible API; `provider/model-name` IDs |
+| **Unified inference** | Hundreds of models via one OpenAI-compatible API; `provider/model-name` IDs |
 | **Routing & fallbacks** | `models: [...]` fallback arrays, `openrouter/auto` dynamic selection |
 | **Sampling guide** | temperature / top_p / penalties / seed / max_tokens with task-based guidance |
 | **Structured output** | JSON mode and schema-validated responses |

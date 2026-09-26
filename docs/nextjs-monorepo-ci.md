@@ -41,7 +41,7 @@ validate → security → build → obfuscate → package → notify
 ## Key gotchas covered
 
 - **Artifact paths**: After `cd apps/web && npm run build`, CI artifact paths must be relative to `$CI_PROJECT_DIR` — a subsequent `cp` breaks this.
-- **Obfuscation exclusions**: `*[turbopack]*` and `*[externals]*` chunks must be excluded or the server crashes at startup with a `ChunkLoadError`.
+- **Obfuscation exclusions**: `[turbopack]` and `[externals]` chunks must be excluded (with escaped brackets in `find -path` — unescaped they form a glob class that excludes every file) or the server crashes at startup with a `ChunkLoadError`.
 - **Kaniko auth**: Harbor credentials must be written to `/kaniko/.docker/config.json` in `before_script` using base64-encoded auth, not mounted as a Docker config.
 - **`.dockerignore`**: Must NOT exclude `.next/` — the pre-built standalone output is the entire build context.
 - **gitleaks allowlists**: IndexNow keys (32-char hex) and Google Analytics Measurement IDs look like secrets to gitleaks and need explicit regex allowlists.

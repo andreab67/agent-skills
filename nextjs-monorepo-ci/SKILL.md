@@ -123,8 +123,8 @@ Obfuscates Next.js standalone output with `javascript-obfuscator`. **Must exclud
       find apps/${APP_NAME}/.next/standalone -name "*.js" \
           -not -path "*/node_modules/*" \
           -not -name "instrumentation.js" \
-          -not -path "*[turbopack]*" \
-          -not -path "*[externals]*" | while read jsfile; do
+          -not -path '*\[turbopack\]*' \
+          -not -path '*\[externals\]*' | while read -r jsfile; do
         javascript-obfuscator "$jsfile" \
           --output "$jsfile" \
           --compact true \
@@ -137,9 +137,18 @@ Obfuscates Next.js standalone output with `javascript-obfuscator`. **Must exclud
           --self-defending false \
           --target node
       done
+  # Re-publish the obfuscated output: package jobs use `needs: [obfuscate-<name>]`,
+  # and with `needs` GitLab only downloads artifacts from the listed jobs.
+  artifacts:
+    paths:
+      - apps/${APP_NAME}/.next/
+      - apps/${APP_NAME}/public/
+    expire_in: 1 day
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"   # same gate as build/package — otherwise it runs with no build output
 ```
 
-> **Why exclude `[turbopack]*` and `[externals]*`?** These chunks contain dynamic module loaders. Obfuscating them breaks `_0x…` function references at runtime, causing `ChunkLoadError: Failed to load chunk` on the instrumentation hook.
+> **Why exclude `[turbopack]*` and `[externals]*`?** These chunks contain dynamic module loaders. (The brackets must be escaped in `find -path`: unescaped, `*[turbopack]*` is a glob character class matching any path containing any of those letters — i.e. every file — so nothing gets obfuscated and the job still passes.) Obfuscating them breaks `_0x…` function references at runtime, causing `ChunkLoadError: Failed to load chunk` on the instrumentation hook.
 
 ### Stage: package (Kaniko)
 
@@ -157,6 +166,14 @@ Kaniko runs unprivileged — no DinD, no privileged pods:
       AUTH="$(printf '%s:%s' "$HARBOR_USERNAME" "$HARBOR_PASSWORD" | base64 | tr -d '\n')"
       printf '{"auths":{"%s":{"auth":"%s"}}}' "$HARBOR_REGISTRY" "$AUTH" \
         > /kaniko/.docker/config.json
+  script:
+    # Context is the app dir: the Dockerfile below COPYs .next/standalone,
+    # .next/static and public from the (obfuscated) build artifacts.
+    - >-
+      /kaniko/executor
+      --context "${CI_PROJECT_DIR}/apps/${APP_NAME}"
+      --dockerfile "${CI_PROJECT_DIR}/apps/${APP_NAME}/Dockerfile"
+      --destination "${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${APP_NAME}:${CI_COMMIT_SHA}"
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
 ```
@@ -210,8 +227,8 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 1. **Scaffold the app directory** — `apps/<name>/` with its own `package.json`; run `npm install` locally and commit `package-lock.json`. *Success*: `npm ci` would succeed from a clean clone (no lockfile-missing failure).
 2. **Add validate-stage jobs** — copy `lint-web`/`test-web` as `lint-<name>`/`test-<name>`, pointing `cd apps/<name>` and using a `<name>-${CI_COMMIT_REF_SLUG}` cache key. *Success*: the new jobs appear under `validate` in the pipeline graph and pass on a trivial commit.
 3. **Extend the build stage** — add a `build-<name>` job that extends `.app_build` with `variables: { APP_NAME: <name> }`. *Success*: `apps/<name>/.next/` and `apps/<name>/public/` appear as job artifacts.
-4. **Extend the obfuscate stage** — add `obfuscate-<name>` extending `.app_obfuscate` with the same `APP_NAME`. *Success*: the resulting image boots without `ChunkLoadError` (see the Turbopack/externals exclusion above).
-5. **Extend the package stage** — add `package-<name>` extending `.kaniko_package`, pointing at `apps/<name>/Dockerfile`. *Success*: the image lands in Harbor tagged with `$CI_COMMIT_SHA`.
+4. **Extend the obfuscate stage** — add `obfuscate-<name>` extending `.app_obfuscate` with the same `APP_NAME` and `needs: [build-<name>]`. *Success*: the resulting image boots without `ChunkLoadError` (see the Turbopack/externals exclusion above).
+5. **Extend the package stage** — add `package-<name>` extending `.kaniko_package` with `variables: { APP_NAME: <name> }` and `needs: [obfuscate-<name>]` (the template's `script:` builds `apps/<name>/Dockerfile`; `HARBOR_PROJECT` must be set as a CI/CD variable alongside `HARBOR_REGISTRY`). *Success*: the image lands in Harbor as `$HARBOR_REGISTRY/$HARBOR_PROJECT/<name>:$CI_COMMIT_SHA`.
 6. **Add the new job to `notify`'s `needs`** — append `package-<name>` to the `indexnow` job's `needs: [...]` list. *Success*: the pipeline DAG shows `notify` gated on all package jobs, including the new one.
 7. **Add the IndexNow key file** (if the app serves its own domain/subdomain) — `echo -n "YOUR_KEY" > apps/<name>/public/YOUR_KEY.txt`, and allowlist the pattern in `.gitleaks.toml` if not already covered. *Success*: `gitleaks detect` passes and the key file is served under the app's public path.
 
@@ -221,7 +238,7 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 |---------|-------|-----|
 | `cp: cannot stat 'apps/web/.next'` | `cd apps/web` shifts cwd; subsequent `cp` uses relative path | Remove the `cp` — use artifacts `paths` instead |
 | `.next/standalone not found` in Docker build | `.dockerignore` excludes `.next` | Remove `.next` from `.dockerignore` |
-| `ChunkLoadError: _0x… is not a function` | Obfuscator mangled Turbopack runtime chunks | Exclude `*[turbopack]*` and `*[externals]*` from find |
+| `ChunkLoadError: _0x… is not a function` | Obfuscator mangled Turbopack runtime chunks | Exclude `'*\[turbopack\]*'` and `'*\[externals\]*'` from find (escaped brackets) |
 | `npm ci` fails: no lockfile | New app scaffolded but `npm install` never run | Run `npm install` locally first, commit `package-lock.json` |
 | gitleaks blocks on IndexNow key | 32-char hex looks like generic API key | Add regex allowlist to `.gitleaks.toml` |
 
@@ -236,5 +253,5 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 
 ## Related skills
 
-- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — deploy the Docker images built by this pipeline
-- [`confluence-to-nextjs`](./confluence-to-nextjs/SKILL.md) — when adding a `kb` app to the monorepo
+- [`k8s-nextjs-deploy`](../k8s-nextjs-deploy/SKILL.md) — deploy the Docker images built by this pipeline
+- [`confluence-to-nextjs`](../confluence-to-nextjs/SKILL.md) — when adding a `kb` app to the monorepo

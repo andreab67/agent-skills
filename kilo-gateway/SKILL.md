@@ -1,6 +1,6 @@
 ---
 name: kilo-gateway
-description: Kilo.ai gateway — OpenAI-compatible API over 500+ models, BYOK routing, cost tracking
+description: "Kilo.ai OpenAI-compatible API gateway at base_url https://api.kilo.ai/api/gateway: BYOK (bring your own provider key) or managed billing, provider/model routing across 14+ providers, :free models, and per-request cost tracking. Use when configuring or calling the Kilo gateway, or debugging its errors (404 missing /api/gateway or bad model prefix, 401 wrong key, 402 balance depleted, 429 free-tier rate limit). Do NOT use for calling a provider SDK (Anthropic, OpenAI) directly, or for the OpenRouter gateway - those have their own skills."
 ---
 
 # Kilo.ai Gateway

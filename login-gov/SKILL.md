@@ -1,11 +1,11 @@
 ---
 name: login-gov
-description: Integrate with login.gov as a federal identity provider — OIDC and SAML federation, private_key_jwt client authentication, ACR value selection (auth-only, verified, facial-match, PIV/CAC), sandbox and production setup, token flow implementation, user attribute scopes, and Partner Portal configuration. Use this skill whenever the user mentions login.gov, federal SSO, private_key_jwt, IAL2, ACR values, identity proofing, PIV/CAC authentication, the login.gov Partner Portal, or any error from the login.gov IdP — even if they just say "integrate with login.gov" or "federal identity" without more detail.
+description: Integrate with login.gov as a federal identity provider — OIDC federation (SAML exists but is out of scope here), private_key_jwt client authentication, ACR value selection (auth-only, verified, facial-match, PIV/CAC), sandbox and production setup, token flow implementation, user attribute scopes, and Partner Portal configuration. Use this skill whenever the user mentions login.gov, federal SSO, private_key_jwt, IAL2, ACR values, identity proofing, PIV/CAC authentication, the login.gov Partner Portal, or any error from the login.gov IdP — even if they just say "integrate with login.gov" or "federal identity" without more detail.
 ---
 
 # login-gov
 
-Federal identity provider integration using login.gov. Covers OIDC (preferred) and SAML, private_key_jwt authentication, assurance level selection, and the full token exchange flow.
+Federal identity provider integration using login.gov. Covers OIDC (login.gov's preferred protocol), private_key_jwt authentication, assurance level selection, and the full token exchange flow.
 
 ## When to use
 
@@ -18,7 +18,7 @@ Federal identity provider integration using login.gov. Covers OIDC (preferred) a
 
 Do NOT use for:
 - Non-federal identity providers (Okta, Auth0, Cognito — use their own SDKs)
-- SAML SP setup (login.gov supports SAML but OIDC is preferred; ask user to confirm)
+- SAML SP setup (login.gov supports SAML, but this skill covers OIDC only; confirm the user can use OIDC before proceeding)
 - Private-sector applications (login.gov is US federal agencies only)
 
 ---
@@ -193,7 +193,8 @@ Response attributes depend on scopes requested:
 | `email` | `email`, `email_verified` |
 | `all_emails` | `all_emails` array |
 | `phone` | `phone`, `phone_verified` |
-| `profile` | `given_name`, `family_name`, `birthdate`, `verified_at` |
+| `profile` | `given_name`, `family_name`, `birthdate` |
+| `profile:verified_at` | `verified_at` (Unix timestamp of identity verification; `null` if not verified) — **not** included in bare `profile` |
 | `profile:name` | `given_name`, `family_name` |
 | `profile:birthdate` | `birthdate` |
 | `address` | `address` object (street, city, state, zip) |
@@ -251,5 +252,5 @@ Response attributes depend on scopes requested:
 
 ## Related skills
 
-- [`arcgis-enterprise-k8s`](./arcgis-enterprise-k8s/SKILL.md) — if fronting ArcGIS with federal identity via login.gov
-- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS hardening for the server running the integration
+- [`arcgis-enterprise-k8s`](../arcgis-enterprise-k8s/SKILL.md) — if fronting ArcGIS with federal identity via login.gov
+- [`ubuntu24-stig`](../ubuntu24-stig/SKILL.md) — OS hardening for the server running the integration

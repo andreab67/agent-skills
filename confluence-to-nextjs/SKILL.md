@@ -23,8 +23,10 @@ Use `scripts/fetch-page.sh` rather than hand-rolling the curl call — it pins `
 
 ```bash
 CONFLUENCE_EMAIL=user@example.com CONFLUENCE_TOKEN=ATATT3x... \
-  ./scripts/fetch-page.sh your-org PAGE_ID page.json
+  bash "<this-skill-dir>/scripts/fetch-page.sh" your-org PAGE_ID page.json
 ```
+
+`<this-skill-dir>` is the directory containing this SKILL.md, e.g. `~/.claude/skills/confluence-to-nextjs` — the agent runs from the user's project directory, not the skill directory, so invoke the script by its full path rather than a `./scripts/...`-relative one.
 
 The `storage` format returns HTML with Confluence-specific tags (`<ac:structured-macro>`, `<ac:parameter>`, `<ri:attachment>`) that must be stripped and converted.
 
@@ -39,11 +41,11 @@ The `storage` format returns HTML with Confluence-specific tags (`<ac:structured
 | `<strong>`, `<em>`, `<code>` | Pass through as-is |
 | `<ul>`, `<ol>`, `<li>` | Pass through as-is |
 
-Slug generation for heading IDs — use `scripts/slugify.mjs` rather than reimplementing it per migration; it also dedupes collisions (Anti-pattern 6) via `dedupeSlugs()`:
+Slug generation for heading IDs — use `scripts/slugify.mjs` rather than reimplementing it per migration; it also dedupes collisions (Anti-pattern 6) via `dedupeSlugs()`. Non-ASCII headings are normalized and stripped of diacritics (e.g. "Café Überblick" -> `cafe-uberblick`); a heading with no ASCII letters/digits left after that (e.g. a CJK-only heading) falls back to the slug `section` instead of an empty id, and repeats of that fallback are deduped like any other collision (`section`, `section-2`, ...):
 
 ```bash
-node scripts/slugify.mjs "Standard Support Contract"   # -> standard-support-contract
-node scripts/slugify.mjs --file headings.txt           # dedup a whole page's headings in order
+node "<this-skill-dir>/scripts/slugify.mjs" "Standard Support Contract"   # -> standard-support-contract
+node "<this-skill-dir>/scripts/slugify.mjs" --file headings.txt          # dedup a whole page's headings in order
 ```
 
 ## Step 3: Page structure
@@ -230,5 +232,5 @@ Realistic failure modes when running a Confluence migration, how to detect them,
 
 ## Related skills
 
-- [`nextjs-monorepo-ci`](./nextjs-monorepo-ci/SKILL.md) — add the `apps/kb` Next.js app to the CI pipeline
-- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — deploy the KB app to Kubernetes
+- [`nextjs-monorepo-ci`](../nextjs-monorepo-ci/SKILL.md) — add the `apps/kb` Next.js app to the CI pipeline
+- [`k8s-nextjs-deploy`](../k8s-nextjs-deploy/SKILL.md) — deploy the KB app to Kubernetes

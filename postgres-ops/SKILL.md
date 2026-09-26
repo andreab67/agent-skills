@@ -1,6 +1,6 @@
 ---
 name: postgres-ops
-description: Operational PostgreSQL workflows for production environments — diagnosing slow queries, lock contention, bloat, replication lag, and connection-pool exhaustion; designing and reviewing backups (pg_dump, pg_basebackup, PITR via WAL archiving); planning upgrades and major-version migrations; configuring pgBouncer/RDS Proxy/PgCat; tuning postgresql.conf for OLTP and analytics workloads; writing and reviewing schema migrations across EF Core, Alembic, Flyway, and raw SQL; setting up observability with postgres_exporter to Prometheus, log shipping to Loki, and slow-query alerting; hardening for DoD/federal use (STIG, role separation, RLS, pgaudit, TLS). Use this skill whenever the user mentions Postgres, PostgreSQL, pg_, EXPLAIN ANALYZE, autovacuum, pgBouncer, replication lag, schema migrations, or anything involving a Postgres incident, performance problem, upgrade, backup, or compliance audit — even if they don't say "Postgres" explicitly but the context is clearly a relational database on PostgreSQL. Do NOT use for greenfield CRUD scaffolding — use nextjs-react-postgres-builder for that.
+description: Operational PostgreSQL workflows for production - diagnosing slow queries, lock contention, bloat, replication lag, and connection-pool exhaustion; designing and reviewing backups and PITR; planning upgrades and major-version migrations; configuring pgBouncer, RDS Proxy, or PgCat; tuning postgresql.conf for OLTP and analytics; reviewing schema migrations (EF Core, Alembic, Flyway, raw SQL); observability with postgres_exporter, Loki, and slow-query alerting; DoD/federal hardening (STIG, role separation, RLS, pgaudit, TLS). Use whenever the user mentions Postgres, PostgreSQL, pg_, EXPLAIN ANALYZE, autovacuum, pgBouncer, replication lag, or schema migrations, or describes a Postgres incident, performance problem, upgrade, backup, or compliance audit - even without saying Postgres when the context is clearly PostgreSQL. Do NOT use for greenfield CRUD scaffolding (a separate app-scaffolding skill, not in this catalog).
 ---
 
 # postgres-ops
@@ -20,7 +20,7 @@ Trigger on operational Postgres tasks:
 - **Observability**: postgres_exporter, pg_stat_statements, auto_explain, slow query log shipping (Loki), Grafana dashboards, SLO definition.
 
 Do NOT trigger for:
-- New-feature CRUD scaffolding in Next.js (use `nextjs-react-postgres-builder`).
+- New-feature CRUD scaffolding in Next.js (use a dedicated app-scaffolding skill; none ships in this catalog).
 - Pure SQL-language questions ("what does LATERAL do") with no operational context.
 - Other database engines (MySQL, SQL Server, Cosmos DB).
 
@@ -157,5 +157,5 @@ Domain-specific failure modes when running the diagnostic/fix workflows above:
 
 ## Related skills
 
-- [`k8s-nextjs-deploy`](./k8s-nextjs-deploy/SKILL.md) — Kubernetes deployment patterns if Postgres runs in-cluster
-- [`ubuntu24-stig`](./ubuntu24-stig/SKILL.md) — OS-level STIG hardening for the host running Postgres
+- [`k8s-nextjs-deploy`](../k8s-nextjs-deploy/SKILL.md) — Kubernetes deployment patterns if Postgres runs in-cluster
+- [`ubuntu24-stig`](../ubuntu24-stig/SKILL.md) — OS-level STIG hardening for the host running Postgres

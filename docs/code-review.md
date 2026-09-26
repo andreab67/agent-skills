@@ -44,7 +44,7 @@ The model running the skill is the **orchestrator**: it scopes the diff, briefs 
 - Re-flag pre-existing issues the diff didn't introduce, or anything a linter / typechecker / compiler already catches.
 - Raise nitpicks a senior engineer wouldn't, or rules the code explicitly silences.
 - Keep a finding without a concrete, code-verified failure scenario.
-- Replace domain reviewers — infra-manifest review (`kubernetes-deployment-reviewer`), UI/design review, and plan/eval review are separate lenses.
+- Replace domain reviewers — infra-manifest review (a dedicated Kubernetes manifest reviewer, not part of this catalog), UI/design review, and plan/eval review are separate lenses.
 
 ## Related skills
 

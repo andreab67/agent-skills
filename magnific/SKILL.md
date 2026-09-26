@@ -1,6 +1,6 @@
 ---
 name: magnific
-description: Magnific generative-media API (api.magnific.com, part of Freepik) — image generation, upscaling, video, audio, and stock content through one async task API. Use when calling Magnific or working with any of its models — Mystic; Flux (2 Pro / 2 Turbo / 2 Klein / Dev / Kontext Pro / Pro v1.1 / HyperFlux); Seedream 4 / 4.5 / 4.5 Edit; Z-Image; the Creative & Precision Upscalers; Relight; Style Transfer; Remove Background; Image Expand; Kling 2.1/2.5/2.6/O1/Motion-Control; MiniMax Hailuo & Video-01-Live; WAN 2.5/2.6; Runway Gen4 Turbo & Act-Two; LTX 2.0 Pro; Seedance; PixVerse; OmniHuman; VFX; music generation; sound effects; audio isolation; or the team analytics + stock (icons / videos / templates) endpoints. Triggers — "Magnific API", "x-magnific-api-key", "upscale an image", "image to video", "generate an image/video/music", "poll a task_id", "Magnific webhook signature", "Magnific MCP". Covers the submit→poll-or-webhook task model, auth, webhook HMAC verification, rate limits, pricing, and the full per-endpoint catalog in references/. Do NOT use for non-Magnific image tools, the generic OpenAI/Anthropic SDKs, or unrelated Freepik stock APIs.
+description: "Magnific generative-media API (api.magnific.com, part of Freepik) - image generation, editing/upscaling, video, audio, and stock content through one async submit -> poll-or-webhook task API. Use when calling Magnific or working with any of its models (Mystic, Flux family, Seedream, Z-Image, Upscalers, Relight, Style Transfer, Remove Background, Image Expand, Kling, MiniMax, WAN, Runway, LTX, Seedance, PixVerse, OmniHuman, VFX, music/SFX/audio isolation, or stock icons/videos/templates). Triggers: \"Magnific API\", \"x-magnific-api-key\", \"upscale an image\", \"image to video\", \"generate an image/video/music\", \"poll a task_id\", \"Magnific webhook signature\", \"Magnific MCP\". Covers auth, webhook HMAC verification, rate limits, pricing, and the full per-endpoint catalog in references/. Do NOT use for non-Magnific image tools, the generic OpenAI/Anthropic SDKs, or unrelated Freepik stock APIs."
 ---
 
 # magnific
@@ -84,7 +84,8 @@ def wait(model_path: str, task_id: str, *, interval=3, timeout=600) -> list[str]
     while time.time() < deadline:
         r = requests.get(f"{BASE}/ai/{model_path}/{task_id}", headers=HEADERS, timeout=30)
         r.raise_for_status()
-        data = r.json()["data"]
+        payload = r.json()
+        data = payload.get("data", payload)   # Style Transfer's response isn't wrapped in "data"
         status = data.get("status") or data.get("task_status")   # Style Transfer uses task_status
         if status == "COMPLETED":
             return data["generated"]
@@ -213,14 +214,24 @@ task_id = requests.post("https://api.magnific.com/v1/ai/image-to-video/kling-v2-
 
 ### Receive + verify a webhook (Svix-style HMAC-SHA256)
 
-Magnific signs webhooks the way Svix does. Each delivery carries three headers — `webhook-id`, `webhook-timestamp`, `webhook-signature` — and you verify by HMAC-ing `"{id}.{timestamp}.{raw_body}"`. **Get the signing secret from the dashboard** (*magnific.com/user/organization/api-keys*). Always verify against the **raw** request body, before any JSON parsing.
+Magnific signs webhooks the way Svix does. Each delivery carries three headers — `webhook-id`, `webhook-timestamp`, `webhook-signature` — and you verify by HMAC-ing `"{id}.{timestamp}.{raw_body}"`. **Get the signing secret from the dashboard** (*magnific.com/user/organization/api-keys*). Always verify against the **raw** request body, before any JSON parsing. Also **reject deliveries whose `webhook-timestamp` is too far from now** — a correctly-signed old delivery is a valid replay otherwise. `tolerance` defaults to 300 seconds (the Svix-ecosystem default); it's caller-tunable.
 
 ```python
-import hmac, hashlib, base64
+import hmac, hashlib, base64, time
 
-def verify_magnific_webhook(secret: str, headers: dict, raw_body: bytes) -> bool:
+def verify_magnific_webhook(secret: str, headers: dict, raw_body: bytes, *, tolerance: int = 300) -> bool:
     wid   = headers["webhook-id"]
     wts   = headers["webhook-timestamp"]
+
+    # Reject deliveries too far from now (replay protection). A non-numeric
+    # timestamp is invalid, not an exception to raise.
+    try:
+        ts = int(wts)
+    except (TypeError, ValueError):
+        return False
+    if abs(time.time() - ts) > tolerance:
+        return False
+
     signed = f"{wid}.{wts}.{raw_body.decode()}".encode()
 
     # Svix secrets are usually base64 (sometimes prefixed "whsec_"); decode if so.
@@ -243,8 +254,16 @@ def verify_magnific_webhook(secret: str, headers: dict, raw_body: bytes) -> bool
 ```javascript
 // Node — same scheme
 import crypto from "node:crypto";
-export function verify(secret, headers, rawBody) {
-  const signed = `${headers["webhook-id"]}.${headers["webhook-timestamp"]}.${rawBody}`;
+export function verify(secret, headers, rawBody, toleranceSec = 300) {
+  const wts = headers["webhook-timestamp"];
+
+  // Reject deliveries too far from now (replay protection). A non-numeric
+  // timestamp is invalid, not an exception to throw.
+  const ts = Number(wts);
+  if (!Number.isFinite(ts)) return false;
+  if (Math.abs(Date.now() / 1000 - ts) > toleranceSec) return false;
+
+  const signed = `${headers["webhook-id"]}.${wts}.${rawBody}`;
   const key = secret.startsWith("whsec_") ? secret.slice(6) : secret;
   const keyBuf = Buffer.from(key, "base64");
   const expected = crypto.createHmac("sha256", keyBuf).update(signed).digest("base64");

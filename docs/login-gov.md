@@ -20,7 +20,6 @@ Guides the full login.gov OIDC integration: key pair generation, Partner Portal 
 |------|------------|
 | **Authorization code + `private_key_jwt`** | Web applications (required — no client secrets) |
 | **Authorization code + PKCE** | Native mobile apps |
-| **SAML** | Legacy agency systems (login.gov supports it, but OIDC is preferred) |
 
 ## ACR levels at a glance
 
@@ -69,7 +68,7 @@ Guides the full login.gov OIDC integration: key pair generation, Partner Portal 
 
 - Non-federal identity providers (Okta, Auth0, Cognito, Entra ID)
 - Private-sector applications
-- Full SAML SP setup (OIDC is preferred; ask to confirm before going SAML)
+- SAML SP setup (login.gov supports SAML, but this skill covers OIDC only)
 
 ## Related skills
 

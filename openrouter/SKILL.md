@@ -199,13 +199,9 @@ Models use the format `provider/model-name`:
 
 ## Reference Files
 
-This skill includes comprehensive documentation in `references/`:
+- [`references/account-analytics-endpoints.md`](references/account-analytics-endpoints.md) — `/credits`, `/keys`, `/activity`, beta `/analytics/query`, and the `/models` field reference.
 
-- **llms-full.md** - Complete list of available models with metadata
-- **llms-small.md** - Curated subset of popular models
-- **llms.md** - Standard model listings
-
-Use `view` to read specific reference files when detailed model information is needed.
+This skill deliberately ships no model-list snapshot — it would be stale within weeks. For the current catalog (IDs, context lengths, per-token pricing) call `GET https://openrouter.ai/api/v1/models` (no auth required) and read the fields documented in the reference above.
 
 ## Working with This Skill
 

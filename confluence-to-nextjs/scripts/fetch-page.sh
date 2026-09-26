@@ -21,8 +21,20 @@ OUT="${3:-page-${PAGE_ID}.json}"
 : "${CONFLUENCE_EMAIL:?Set CONFLUENCE_EMAIL to your Atlassian account email}"
 : "${CONFLUENCE_TOKEN:?Set CONFLUENCE_TOKEN to a personal API token}"
 
-HTTP_STATUS=$(curl -s -o "$OUT" -w "%{http_code}" \
-  -u "${CONFLUENCE_EMAIL}:${CONFLUENCE_TOKEN}" \
+# Escape backslashes and double quotes so the value is safe inside a
+# double-quoted curl config entry (see `man curl` "-K, --config").
+escape_for_curl_config() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+# Pass credentials via a curl config on stdin (-K -) instead of -u, so the
+# token never appears in this process's argv (and thus never in `ps` output
+# on shared hosts/CI runners).
+CURL_CONFIG=$(printf 'user = "%s:%s"\n' \
+  "$(escape_for_curl_config "$CONFLUENCE_EMAIL")" \
+  "$(escape_for_curl_config "$CONFLUENCE_TOKEN")")
+
+HTTP_STATUS=$(printf '%s\n' "$CURL_CONFIG" | curl -sS -K - -o "$OUT" -w "%{http_code}" \
   "https://${SITE}.atlassian.net/wiki/api/v2/pages/${PAGE_ID}?body-format=storage")
 
 if [[ "$HTTP_STATUS" != "200" ]]; then

@@ -18,7 +18,7 @@ Guides the full migration workflow: fetch pages via the Confluence REST API, par
 
 | Step | What happens |
 |------|-------------|
-| **1. Fetch** | `curl` with personal API token → raw Confluence storage-format HTML |
+| **1. Fetch** | `scripts/fetch-page.sh` (personal API token via a curl config, not `-u`) → raw Confluence storage-format HTML |
 | **2. Parse** | Map Confluence tags to JSX equivalents (headings → anchored headings, macros → callout divs, tables → styled tables) |
 | **3. Build page** | Each Confluence page becomes one `page.tsx` file in `app/<slug>/` |
 | **4. Table of contents** | `TableOfContents` component with `IntersectionObserver` for active-section highlighting |
@@ -39,7 +39,7 @@ Guides the full migration workflow: fetch pages via the Confluence REST API, par
 | Confluence HTML | JSX output |
 |----------------|-----------|
 | `<h2>` with text | `<h2 id="slugified-text">` |
-| `<ac:structured-macro name="info">` | `<div className="info-callout">` |
+| `<ac:structured-macro ac:name="info">` | `<div className="info-callout">` |
 | `<table>` | `<table className="kb-table">` |
 | `<ac:link>` | Removed or replaced with external link |
 | `<strong>`, `<em>`, `<code>` | Passed through unchanged |

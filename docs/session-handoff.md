@@ -31,7 +31,7 @@ The whole skill rides on **one heuristic** — *would re-reading the repo recove
 | **Body structure by type** | `feedback`/`project` entries lead with the rule, then `**Why:**` and `**How to apply:**` lines — so future-you can judge edge cases instead of blindly following |
 | **Date normalization** | Converts "Thursday" / "next week" / "after the demo" to absolute dates at extraction time |
 | **Worked end-to-end example** | A 90-minute design session → 11 candidates → 6 keep, 5 drop, with the exact triage table |
-| **Optional `/clear` hook** | `UserPromptSubmit` hook (ships in `hooks/session-handoff-gate.js`) that blocks the first `/clear`, routes to the skill, lets the second through |
+| **Optional `/clear` hook** | `UserPromptSubmit` hook (ships in `hooks/session-handoff-gate.js`) that asks you to run the handoff before the first `/clear` goes through, then lets the second `/clear` proceed. Not guaranteed by Claude Code's docs to see the built-in `/clear` command at all — verify locally before relying on it (see [references/clear-hook.md](../session-handoff/references/clear-hook.md)) |
 
 ## Example prompts
 
@@ -56,7 +56,7 @@ The whole skill rides on **one heuristic** — *would re-reading the repo recove
 
 The skill assumes you use Claude Code's auto-memory store at `~/.claude/projects/<project-slug>/memory/`, with the standard `user`/`feedback`/`project`/`reference` schema and an index file at `MEMORY.md`. If your project's auto-memory block isn't visible in the system prompt, the skill asks where to write.
 
-It also assumes you'll invoke it manually before `/clear`. The hook in [Appendix A of the skill body](../session-handoff/SKILL.md#appendix-a-optional-hook-for-automatic-activation-on-clear) is opt-in for users who want `/clear` itself to gate the rescue flow.
+It also assumes you'll invoke it manually before `/clear`. The hook in [Appendix A of the skill body](../session-handoff/SKILL.md#appendix-a-optional-hook-for-automatic-activation-on-clear) is opt-in for users who want `/clear` itself to gate the rescue flow — but Claude Code's docs don't guarantee the built-in `/clear` command reaches the `UserPromptSubmit` hook, so verify it locally (type `/clear` once and confirm you see the block message) before relying on it.
 
 ## Related skills
 

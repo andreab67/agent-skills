@@ -204,7 +204,7 @@ A full worked triage — a 90-minute EC2→ECS migration session scanned into 11
 
 ## Appendix A: optional hook for automatic activation on `/clear`
 
-Skip this if you're happy invoking the skill manually. For users who want `/clear` itself to be the trigger, **[references/clear-hook.md](references/clear-hook.md)** has the full setup: the `UserPromptSubmit` matcher config, the `session-handoff-gate.js` script (blocks the first `/clear`, lets the second through — also shipped in this skill dir as `hooks/session-handoff-gate.js`), and how to disarm it.
+Skip this if you're happy invoking the skill manually. For users who want `/clear` itself to be the trigger, **[references/clear-hook.md](references/clear-hook.md)** has the full setup: the `UserPromptSubmit` hook config (no `matcher` — `UserPromptSubmit` has none; the script itself checks `payload.prompt`), the `session-handoff-gate.js` script (blocks the first `/clear` with a message shown to the user, lets the second through — also shipped in this skill dir as `hooks/session-handoff-gate.js`), how to disarm it, and a caveat about verifying `/clear` actually reaches this hook.
 
 ## Related skills
 

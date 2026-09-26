@@ -80,6 +80,11 @@ completion = client.chat.completions.create(
 ```typescript
 import OpenAI from 'openai';
 
+const openai = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: process.env.OPENROUTER_API_KEY,
+});
+
 // `models` is an OpenRouter extension to the request body — it isn't in
 // openai-node's ChatCompletionCreateParams types, so build the body as a
 // loosely-typed object and cast it at the call site.
@@ -88,7 +93,7 @@ const body = {
     models: ['anthropic/claude-3.5-sonnet', 'gryphe/mythomax-l2-13b'],
     messages: [{ role: 'user', content: 'Your prompt here' }],
 };
-const completion = await client.chat.completions.create(
+const completion = await openai.chat.completions.create(
     body as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming
 );
 ```

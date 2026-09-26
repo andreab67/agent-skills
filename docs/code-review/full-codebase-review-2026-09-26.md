@@ -4,7 +4,7 @@
 
 **Terminal status: READY FOR MERGE (pending owner action on tags; see Blockers).** Only the proposal to merge was made; nothing was merged.
 
-The review covered all 57 tracked files of `andreab67/agent-skills` over four passes. **43 findings were confirmed and fixed**: 2 critical, 12 high, 13 medium and 16 low. Four candidates were rejected as invalid or intentional. One item, the stray `v1.0.0` tag, is blocked on an action only the owner can take.
+The review covered all 57 tracked files of `andreab67/agent-skills` over four passes. **42 findings were confirmed and fixed**: 2 critical, 12 high, 13 medium and 15 low. Each row of the findings table is one finding; `B4/B5/O4` (the same stale pricing table, reported by three reviewers) and `CH-5 / F4-1` (the same CHANGELOG entry, reported twice) are each counted once. Four candidates were rejected as invalid or intentional. One item, the stray `v1.0.0` tag, is blocked on an action only the owner can take.
 
 The most serious defects were in scripts users run:
 - The Ubuntu 24.04 STIG remediation script enabled UFW with no SSH allow rule, which locks you out remotely.
@@ -151,7 +151,7 @@ Severity scale: critical, high, medium, low. All findings are **fixed** unless m
   - The junk reference files are removed.
   - The TS sample compiles under `tsc --strict` with current openai-node.
 - **magnific**
-  - Description is now 895 characters.
+  - Description is now 895 characters (the parsed YAML value, which is what the spec's 1024 limit applies to; the raw frontmatter line is longer because of escaped quotes).
   - `wait()` handles both response shapes.
   - Python and Node verifiers were tested: valid, tampered, stale, non-numeric timestamp, multiple signatures, and cross-language interop.
 - **nextjs-monorepo-ci**
@@ -184,7 +184,7 @@ Severity scale: critical, high, medium, low. All findings are **fixed** unless m
 | 1 | All 57 files: 4 Sonnet partitions, Opus cross-cutting review, Opus skeptic | 31 (+3 invalid/accepted, 1 blocked) | 31 |
 | 2 | All files: 3 Sonnet partitions + independent Opus challenge of the full diff | 6 (+1 refuted: P2A-1) | 6 |
 | 3 | Independent Opus challenge of the full diff + whole-repo sweep | 5 | 5 |
-| 4 | Fresh independent Opus challenge + whole-repo sweep | 1 (low, CHANGELOG) | 1 |
+| 4 | Fresh independent Opus challenge + whole-repo sweep | 0 new (1 low CHANGELOG item, a duplicate of CH-5) | 1 |
 
 Pass 4's only finding was documentation, and it is fixed in the report commit. No actionable code or instruction defects remain open.
 
@@ -209,7 +209,8 @@ To roll back the whole branch, simply don't merge it; `main` was not modified.
   git fetch origin --tags
   git tag -a v1.7 4265a4d -m "v1.7 — code-review skill"
   git push origin v1.7
-  git push origin :refs/tags/v1.0.0     # delete the stray tag
+  git push origin :refs/tags/v1.0.0     # delete the stray tag on GitHub
+  git tag -d v1.0.0                      # ...and locally, so a later --tags push can't re-publish it
   # after merging this branch:
   git tag -a v1.8 <merge-sha> -m "v1.8 — full review pass" && git push origin v1.8
   ```

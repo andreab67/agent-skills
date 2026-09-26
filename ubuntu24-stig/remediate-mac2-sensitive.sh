@@ -313,6 +313,9 @@ pam_faillock_account() {
   cat "$tmp" > "$f"; rm -f "$tmp"
   stig_fix "pam_faillock account line added to $f"
 }
+echo "  ! WARNING: faillock is now ENFORCED (deny=3, unlock_time=0 = permanent until 'faillock --reset')." >&2
+echo "    Three bad sudo/SSH passwords on ubuntu/root lock that account for good. Have a tested" >&2
+echo "    out-of-band path (SSM Session Manager or EC2 serial console) before relying on this host." >&2
 pam_faillock_auth /etc/pam.d/common-auth
 pam_faillock_account /etc/pam.d/common-account
 

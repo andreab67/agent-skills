@@ -96,5 +96,7 @@ process.stdin.on('end', () => {
       'session-handoff skill) to save context first, then send /clear ' +
       'again to proceed.',
   }));
-  process.exit(0);
+  // Not process.exit(): stdout to a pipe is asynchronous on macOS, and exit()
+  // would drop the pending write, turning the block into a silent pass.
+  process.exitCode = 0;
 });

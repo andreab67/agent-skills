@@ -20,7 +20,6 @@ Guides the full login.gov OIDC integration: key pair generation, Partner Portal 
 |------|------------|
 | **Authorization code + `private_key_jwt`** | Web applications (required — no client secrets) |
 | **Authorization code + PKCE** | Native mobile apps |
-| **SAML** | Legacy agency systems (login.gov supports it, but OIDC is preferred) |
 
 ## ACR levels at a glance
 

@@ -5,7 +5,7 @@ description: Integrate with login.gov as a federal identity provider — OIDC fe
 
 # login-gov
 
-Federal identity provider integration using login.gov. Covers OIDC (preferred) and SAML, private_key_jwt authentication, assurance level selection, and the full token exchange flow.
+Federal identity provider integration using login.gov. Covers OIDC (login.gov's preferred protocol), private_key_jwt authentication, assurance level selection, and the full token exchange flow.
 
 ## When to use
 
@@ -18,7 +18,7 @@ Federal identity provider integration using login.gov. Covers OIDC (preferred) a
 
 Do NOT use for:
 - Non-federal identity providers (Okta, Auth0, Cognito — use their own SDKs)
-- SAML SP setup (login.gov supports SAML but OIDC is preferred; ask user to confirm)
+- SAML SP setup (login.gov supports SAML, but this skill covers OIDC only; confirm the user can use OIDC before proceeding)
 - Private-sector applications (login.gov is US federal agencies only)
 
 ---

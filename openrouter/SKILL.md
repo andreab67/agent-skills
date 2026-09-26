@@ -1,6 +1,6 @@
 ---
 name: openrouter
-description: OpenRouter API - Unified access to 400+ AI models through one API
+description: "OpenRouter API - unified, OpenAI-compatible access to hundreds of AI models through one endpoint: chat completions, streaming, JSON/structured output, model fallback arrays, openrouter/auto dynamic routing, sampling parameters (temperature, top_p, penalties, seed), and the account/analytics endpoints (/credits, /keys, /activity, /analytics/query, /models). Use when calling OpenRouter, building usage/cost dashboards on it, or debugging its 402/403/429 errors or an empty /activity response. Do NOT use for direct Anthropic or OpenAI SDK calls, or for the Kilo gateway - those have their own skills."
 ---
 
 # OpenRouter Skill
@@ -78,11 +78,19 @@ completion = client.chat.completions.create(
 
 ### Model Fallback Configuration (TypeScript)
 ```typescript
-const completion = await client.chat.completions.create({
+import OpenAI from 'openai';
+
+// `models` is an OpenRouter extension to the request body — it isn't in
+// openai-node's ChatCompletionCreateParams types, so build the body as a
+// loosely-typed object and cast it at the call site.
+const body = {
     model: 'openai/gpt-4o',
     models: ['anthropic/claude-3.5-sonnet', 'gryphe/mythomax-l2-13b'],
     messages: [{ role: 'user', content: 'Your prompt here' }],
-});
+};
+const completion = await client.chat.completions.create(
+    body as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming
+);
 ```
 
 ### Auto Router (Dynamic Model Selection)

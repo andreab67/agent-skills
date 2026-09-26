@@ -178,6 +178,16 @@ unlock_time = 0
 fail_interval = 900
 EOF
 ```
+`faillock.conf` alone does nothing: Ubuntu 24.04 ships **no** `pam-auth-update` profile for `pam_faillock`, so wire it into the PAM stack by hand (guard with `grep -q pam_faillock` so reruns don't duplicate lines). Stock noble `/etc/pam.d/common-auth` primary block after the edit:
+```
+auth	requisite			pam_faillock.so preauth
+auth	[success=1 default=ignore]	pam_unix.so
+auth	[default=die]			pam_faillock.so authfail
+auth	sufficient			pam_faillock.so authsucc
+auth	requisite			pam_deny.so
+auth	required			pam_permit.so
+```
+Insert `authfail`/`authsucc` directly **before** `auth requisite pam_deny.so` — every `[success=N]` jump in the block targets the line after `pam_deny`, so successes land on `authsucc` and failures on `authfail` without touching any `N` (this also stays correct when `pam_sss` adds `success=2`). Then put `account required pam_faillock.so` above the first `account` line of `/etc/pam.d/common-account`. See anti-pattern 5 before applying.
 
 ### Password aging (SV-270730, SV-270731)
 ```bash
@@ -218,6 +228,14 @@ net.ipv4.tcp_syncookies = 1
 EOF
 sysctl --system
 ```
+
+### UFW firewall (SV-270654, SV-270655)
+```bash
+ufw allow 22/tcp          # or the port(s) from: sshd -T | awk '$1=="port"{print $2}'
+ufw --force enable
+ufw logging on
+```
+Allow SSH **before** `ufw --force enable`: Ubuntu's `DEFAULT_INPUT_POLICY` is `DROP`, so enabling UFW with no allow rule refuses every new SSH connection (your current session survives only via conntrack) and locks you out of the instance.
 
 ### APT autoremove (SV-270773)
 ```bash
@@ -300,6 +318,7 @@ These look like valid hardening moves but will break your instance or produce fa
 5. **Configuring `pam_faillock` lockout without a console or SSM fallback** — if you set `deny=3` and the lockout fires on `root` or `ubuntu`, you can be permanently locked out of a remote-only instance. Confirm AWS Systems Manager Session Manager is configured and tested before applying PAM lockout rules.
 6. **Generating AIDE database after the OS is already modified** — AIDE's integrity baseline must be generated on a known-good clean state. Running `aide --init` after applying STIG remediations but before rebooting or before packages are fully settled will bake transient state into the baseline, causing false positives on every subsequent check.
 7. **Applying audit rules with `auditctl -R` without reloading `auditd`** — `auditctl -R file` loads rules for the current session only; they're lost on reboot. Rules must be placed in `/etc/audit/rules.d/*.rules` and loaded with `service auditd restart` (or equivalent) to survive reboots and pass the STIG check.
+8. **Running `ufw --force enable` before `ufw allow <ssh-port>/tcp`** — Ubuntu's default input policy is `DROP`, so on a remote-only EC2 instance every new SSH connection is refused the moment UFW comes up. Add the SSH allow rule first.
 
 ## Example prompts
 

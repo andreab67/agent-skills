@@ -19,7 +19,9 @@ stig_skip() { echo "  ⚠ SKIP (AWS/NA): $*"; }
 # ---------------------------------------------------------------------------
 log "Installing required packages..."
 DEBIAN_FRONTEND=noninteractive apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
+# No output filter/pipe here: apt-get's own exit status must stand, otherwise a
+# failed install reports OK and every later step silently no-ops.
+if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
   auditd audispd-plugins \
   libpam-pwquality \
   sssd sssd-tools libsss-sudo \
@@ -28,7 +30,10 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   openscap-scanner \
   libpam-pkcs11 \
   opensc \
-  ufw 2>&1 | grep -E "^(Setting|Installing|Unpacking|Get)" || true
+  ufw; then
+  echo "ERROR: apt-get install failed — aborting; later STIG steps depend on these packages." >&2
+  exit 1
+fi
 stig_ok "Packages installed"
 
 # ---------------------------------------------------------------------------
@@ -261,7 +266,55 @@ unlock_time = 0
 fail_interval = 900
 audit
 FLEOF
-stig_ok "faillock configured"
+stig_ok "faillock.conf written"
+
+# faillock.conf alone is inert: Ubuntu 24.04 ships NO pam-auth-update profile
+# for pam_faillock, so the module must be wired into the PAM stack by hand.
+# authfail/authsucc go directly BEFORE the primary block's `requisite pam_deny.so`
+# line: every `[success=N]` jump in that block targets the line after pam_deny, so
+# this lands successes on `authsucc` and failures on `authfail` without changing
+# any N. On a stock noble common-auth this is exactly DISA's "directly below
+# pam_unix.so" layout, and it stays correct when pam_sss (sssd) is also present.
+pam_faillock_auth() {
+  local f=$1 tmp
+  if grep -qE '^[^#]*pam_faillock\.so' "$f"; then
+    stig_ok "pam_faillock already in $f"; return 0
+  fi
+  tmp=$(mktemp)
+  if ! awk '
+    !pre && /^auth[[:space:]].*pam_unix\.so/ {
+      print "auth\trequisite\t\t\tpam_faillock.so preauth"; pre = 1 }
+    pre && !fail && /^auth[[:space:]]+requisite[[:space:]]+pam_deny\.so/ {
+      print "auth\t[default=die]\t\t\tpam_faillock.so authfail"
+      print "auth\tsufficient\t\t\tpam_faillock.so authsucc"; fail = 1 }
+    { print }
+    END { exit !(pre && fail) }' "$f" > "$tmp"; then
+    rm -f "$tmp"
+    echo "ERROR: $f has no 'auth ... pam_unix.so' + 'auth requisite pam_deny.so' primary block — cannot wire pam_faillock (SV-270690). Fix the PAM stack manually." >&2
+    exit 1
+  fi
+  cat "$tmp" > "$f"; rm -f "$tmp"
+  stig_fix "pam_faillock preauth/authfail/authsucc added to $f"
+}
+pam_faillock_account() {
+  local f=$1 tmp
+  if grep -qE '^[^#]*pam_faillock\.so' "$f"; then
+    stig_ok "pam_faillock already in $f"; return 0
+  fi
+  tmp=$(mktemp)
+  if ! awk '
+    !done && /^account[[:space:]]/ { print "account\trequired\t\t\tpam_faillock.so"; done = 1 }
+    { print }
+    END { exit !done }' "$f" > "$tmp"; then
+    rm -f "$tmp"
+    echo "ERROR: $f has no 'account' lines — cannot wire pam_faillock (SV-270690). Fix the PAM stack manually." >&2
+    exit 1
+  fi
+  cat "$tmp" > "$f"; rm -f "$tmp"
+  stig_fix "pam_faillock account line added to $f"
+}
+pam_faillock_auth /etc/pam.d/common-auth
+pam_faillock_account /etc/pam.d/common-account
 
 log "Configuring password aging (SV-270730, SV-270731)..."
 sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS   60/' /etc/login.defs
@@ -315,6 +368,15 @@ stig_ok "sysctl: dmesg_restrict=1, tcp_syncookies=1"
 # 9. UFW FIREWALL — SV-270654, SV-270655
 # ---------------------------------------------------------------------------
 log "Enabling UFW firewall..."
+# Ubuntu's DEFAULT_INPUT_POLICY is DROP: enabling UFW without an SSH allow rule
+# refuses every NEW SSH connection (the current session survives only via
+# conntrack) — i.e. remote lockout. Allow the effective sshd port(s) first.
+SSH_PORTS=$(sshd -T 2>/dev/null | awk '$1=="port"{print $2}' || true)
+[ -n "$SSH_PORTS" ] || SSH_PORTS=22
+for p in $SSH_PORTS; do
+  ufw allow "${p}/tcp" > /dev/null   # idempotent: ufw skips existing rules
+  stig_ok "UFW: SSH port ${p}/tcp allowed"
+done
 ufw --force enable
 ufw logging on
 stig_ok "UFW enabled"

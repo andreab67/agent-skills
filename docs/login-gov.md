@@ -68,7 +68,7 @@ Guides the full login.gov OIDC integration: key pair generation, Partner Portal 
 
 - Non-federal identity providers (Okta, Auth0, Cognito, Entra ID)
 - Private-sector applications
-- Full SAML SP setup (OIDC is preferred; ask to confirm before going SAML)
+- SAML SP setup (login.gov supports SAML, but this skill covers OIDC only)
 
 ## Related skills
 

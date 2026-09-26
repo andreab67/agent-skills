@@ -231,7 +231,12 @@ sysctl --system
 
 ### UFW firewall (SV-270654, SV-270655)
 ```bash
-ufw allow 22/tcp          # or every port from: sshd -T | awk '$1=="listenaddress"{n=split($2,a,":");print a[n]}' | sort -u
+# Every port sshd really listens on: sshd_config (port + ListenAddress host:port)
+# plus ssh.socket ListenStream= overrides, which bypass sshd_config on noble.
+SSH_PORTS=$( { sshd -T 2>/dev/null | awk '$1=="port"{print $2} $1=="listenaddress"{n=split($2,a,":"); print a[n]}'
+               systemctl show -p Listen --value ssh.socket 2>/dev/null | grep -oE ':[0-9]+ \(Stream\)' | tr -dc '0-9\n'
+             } | sort -un || true)
+for p in ${SSH_PORTS:-22}; do ufw allow "${p}/tcp"; done
 ufw --force enable
 ufw logging on
 ```

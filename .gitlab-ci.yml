@@ -138,7 +138,11 @@ package:source:
     - apk add --no-cache bash git
   script:
     - |
+      # Disable pipefail: with `set -eo pipefail` (GitLab's default for
+      # step_script), `tar -tzf | head` aborts the whole job with exit 141
+      # (SIGPIPE) when head closes the read end after 10 lines.
       set -e
+      set +o pipefail
       VERSION="${CI_COMMIT_TAG#v}"
       TARBALL="agent-skills-${VERSION}.tar.gz"
       # `git archive` includes ONLY tracked files at the tagged commit —
@@ -149,10 +153,13 @@ package:source:
         --prefix="agent-skills-${VERSION}/" \
         --output="${TARBALL}" \
         "${CI_COMMIT_TAG}"
+      # Materialize the tar listing to a file first so the head/wc commands
+      # below don't sit at the end of a `tar | head` pipe.
+      tar -tzf "${TARBALL}" > /tmp/_list.txt
       echo "Built ${TARBALL}:"
-      tar -tzf "${TARBALL}" | head -10
+      head -10 /tmp/_list.txt
       echo "..."
-      echo "Total entries: $(tar -tzf "${TARBALL}" | wc -l)"
+      echo "Total entries: $(wc -l < /tmp/_list.txt)"
   artifacts:
     paths:
       - agent-skills-*.tar.gz
@@ -172,7 +179,9 @@ release:create:
     - apk add --no-cache bash
   script:
     - |
+      # Disable pipefail (see package:source for the SIGPIPE explanation).
       set -e
+      set +o pipefail
       VERSION="${CI_COMMIT_TAG#v}"
 
       # 1. Extract the CHANGELOG section for this exact version.
@@ -211,7 +220,9 @@ release:create:
 
       # 4. Persist notes + tarball metadata for the release-cli job.
       printf '%s\n' "$NOTES" > release_notes.md
-      TARBALL=$(ls -1 agent-skills-*.tar.gz | head -1)
+      # We know the tarball name from VERSION — no need to glob and risk
+      # another `ls | head` SIGPIPE.
+      TARBALL="agent-skills-${VERSION}.tar.gz"
       TARBALL_URL="${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/${TARBALL}"
       echo "Source tarball: ${TARBALL_URL}"
 
@@ -271,7 +282,9 @@ release:dry-run:
     - apk add --no-cache bash
   script:
     - |
+      # Disable pipefail (see package:source for the SIGPIPE explanation).
       set -e
+      set +o pipefail
       # The tag we would use = the latest "## vX.Y" header in CHANGELOG.
       NEXT=$(grep -oE '^## v[0-9]+\.[0-9]+(\.[0-9]+)?' CHANGELOG.md | head -1 | sed 's/^## //')
       if [ -z "$NEXT" ]; then
@@ -279,7 +292,9 @@ release:dry-run:
         exit 1
       fi
       echo "Would release as: ${NEXT}"
-      echo "Existing tags: $(git tag -l 'v*' | sort -V | tail -5 | tr '\n' ' ')"
+      # Materialize the tag list first to avoid `sort | tail` SIGPIPE.
+      git tag -l 'v*' | sort -V > /tmp/_tags.txt
+      echo "Existing tags: $(tail -5 /tmp/_tags.txt | tr '\n' ' ')"
       echo ""
       echo "CHANGELOG section for ${NEXT}:"
       echo "----------------------------------------"

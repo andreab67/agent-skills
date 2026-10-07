@@ -35,12 +35,18 @@ lint:frontmatter:
     - apk add --no-cache yq bash
   script:
     - |
-      set -e
       echo "Checking every */SKILL.md has name + 1..1024 char description..."
       fail=0
+      # Extract the YAML frontmatter (between the two '---' markers) and pipe
+      # to yq. yq can't parse a markdown body, so it must only see the YAML.
+      # Strip CR per-line so the `^---$` regex matches CRLF-checked-out
+      # files as well as the Linux runner's default LF.
+      get_field() {
+        awk '{ sub(/\r$/, ""); if (/^---$/) { c++; if (c==2) exit }; if (c) print }' "$2" | yq -r "$1 // \"\""
+      }
       while IFS= read -r -d '' f; do
-        name=$(yq -r '.name // ""' "$f")
-        desc=$(yq -r '.description // ""' "$f")
+        name=$(get_field '.name' "$f")
+        desc=$(get_field '.description' "$f")
         if [ -z "$name" ]; then
           echo "FAIL: $f missing 'name'"; fail=1
         fi
@@ -69,18 +75,24 @@ lint:links:
     - apk add --no-cache bash
   script:
     - |
-      set -e
+      # NOTE: do NOT `set -e` here. GitLab runners invoke step_script with
+      # `set -eo pipefail`, so a `grep` that returns 1 (no match in a given
+      # SKILL.md — the common case) would abort the whole job.
       echo "Checking cross-skill ../<skill>/SKILL.md links resolve to a real file..."
       fail=0
       while IFS= read -r md; do
-        grep -oE '\.\./[A-Za-z0-9._-]+/SKILL\.md' "$md" 2>/dev/null \
-          | sort -u | while read -r ref; do
-            target="$(dirname "$md")/$ref"
-            if [ ! -f "$target" ]; then
-              echo "FAIL: $md -> $ref (not found at $target)"
-              fail=1
-            fi
-          done
+        # `|| true` so no-match grep returns 0; collect refs into a temp file.
+        refs=$(mktemp)
+        grep -oE '\.\./[A-Za-z0-9._-]+/SKILL\.md' "$md" 2>/dev/null | sort -u > "$refs" || true
+        while IFS= read -r ref; do
+          [ -z "$ref" ] && continue
+          target="$(dirname "$md")/$ref"
+          if [ ! -f "$target" ]; then
+            echo "FAIL: $md -> $ref (not found at $target)"
+            fail=1
+          fi
+        done < "$refs"
+        rm -f "$refs"
       done < <(find . -path ./.git -prune -o \( -name 'SKILL.md' -o -path './docs/*.md' \) -print)
       exit $fail
   rules:

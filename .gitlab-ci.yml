@@ -1,0 +1,286 @@
+# agent-skills CI — validate on every push, cut a GitLab Release on every tag.
+#
+# Release workflow (manual, by design — auto-tagging on push is dangerous):
+#   1. Add a `## vX.Y[.Z] — YYYY-MM-DD` section to the top of CHANGELOG.md
+#   2. Commit + push to main
+#   3. `git tag vX.Y[.Z] && git push --tags`
+#   CI extracts the matching CHANGELOG section and creates a GitLab Release
+#   with the source archive linked.
+#
+# The tag must match /^v[0-9]+\.[0-9]+(\.[0-9]+)?$/ and the matching
+# `## vX.Y[.Z]` section must exist in CHANGELOG.md, else the release job fails.
+
+stages:
+  - validate
+  - package
+  - release
+
+variables:
+  # The release-cli version is pinned via the image tag below; refresh together.
+  RELEASE_CLI_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:v0.24.0"
+
+# Shared default: keep artifacts for the release window.
+default:
+  interruptible: true
+
+# -----------------------------------------------------------------------------
+# Validate — every push, every MR, every tag. Fast, ~10s.
+# -----------------------------------------------------------------------------
+
+lint:frontmatter:
+  stage: validate
+  image: alpine:3.20
+  cache: []
+  before_script:
+    - apk add --no-cache yq bash
+  script:
+    - |
+      set -e
+      echo "Checking every */SKILL.md has name + 1..1024 char description..."
+      fail=0
+      while IFS= read -r -d '' f; do
+        name=$(yq -r '.name // ""' "$f")
+        desc=$(yq -r '.description // ""' "$f")
+        if [ -z "$name" ]; then
+          echo "FAIL: $f missing 'name'"; fail=1
+        fi
+        if [ -z "$desc" ]; then
+          echo "FAIL: $f missing 'description'"; fail=1
+        fi
+        dlen=${#desc}
+        if [ "$dlen" -gt 1024 ]; then
+          echo "FAIL: $f description is $dlen chars (max 1024)"; fail=1
+        fi
+        if printf '%s' "$name" | grep -qiE 'anthropic|claude'; then
+          echo "FAIL: $f name '$name' contains reserved word (anthropic|claude)"; fail=1
+        fi
+      done < <(find . -path ./.git -prune -o -path '*/SKILL.md' -print0)
+      exit $fail
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+lint:links:
+  stage: validate
+  image: alpine:3.20
+  cache: []
+  before_script:
+    - apk add --no-cache bash
+  script:
+    - |
+      set -e
+      echo "Checking cross-skill ../<skill>/SKILL.md links resolve to a real file..."
+      fail=0
+      while IFS= read -r md; do
+        grep -oE '\.\./[A-Za-z0-9._-]+/SKILL\.md' "$md" 2>/dev/null \
+          | sort -u | while read -r ref; do
+            target="$(dirname "$md")/$ref"
+            if [ ! -f "$target" ]; then
+              echo "FAIL: $md -> $ref (not found at $target)"
+              fail=1
+            fi
+          done
+      done < <(find . -path ./.git -prune -o \( -name 'SKILL.md' -o -path './docs/*.md' \) -print)
+      exit $fail
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+lint:secrets:
+  stage: validate
+  image: alpine:3.20
+  cache: []
+  before_script:
+    - apk add --no-cache bash git
+  script:
+    - |
+      set -e
+      # Pre-filter secret patterns in tracked files.
+      # Cheap, no extra image; gitleaks is overkill for a markdown-only repo.
+      PATTERNS='(AKIA[0-9A-Z]{16})|(glpat-[A-Za-z0-9_-]{20,})|(?i)(bearer [A-Za-z0-9._-]{30,})|(-----BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----)'
+      fail=0
+      while IFS= read -r f; do
+        if grep -E -Hn "$PATTERNS" "$f" >/tmp/hits && [ -s /tmp/hits ]; then
+          echo "FAIL: $f contains a potential secret:"
+          cat /tmp/hits
+          fail=1
+        fi
+      done < <(git ls-files)
+      exit $fail
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# -----------------------------------------------------------------------------
+# Package — build a deterministic source tarball on tag pushes.
+# -----------------------------------------------------------------------------
+
+package:source:
+  stage: package
+  image: alpine:3.20
+  cache: []
+  before_script:
+    - apk add --no-cache bash git
+  script:
+    - |
+      set -e
+      VERSION="${CI_COMMIT_TAG#v}"
+      TARBALL="agent-skills-${VERSION}.tar.gz"
+      # `git archive` includes ONLY tracked files at the tagged commit —
+      # worktrees, .varmem, local scratch files, and untracked junk are
+      # automatically excluded. Output is deterministic.
+      git archive \
+        --format=tar.gz \
+        --prefix="agent-skills-${VERSION}/" \
+        --output="${TARBALL}" \
+        "${CI_COMMIT_TAG}"
+      echo "Built ${TARBALL}:"
+      tar -tzf "${TARBALL}" | head -10
+      echo "..."
+      echo "Total entries: $(tar -tzf "${TARBALL}" | wc -l)"
+  artifacts:
+    paths:
+      - agent-skills-*.tar.gz
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+(\.[0-9]+)?$/
+
+# -----------------------------------------------------------------------------
+# Release — create a GitLab Release on tag pushes.
+# -----------------------------------------------------------------------------
+
+release:create:
+  stage: release
+  image: alpine:3.20
+  cache: []
+  before_script:
+    - apk add --no-cache bash
+  script:
+    - |
+      set -e
+      VERSION="${CI_COMMIT_TAG#v}"
+
+      # 1. Extract the CHANGELOG section for this exact version.
+      #    Pattern: `^## vX.Y[.Z] ` (with space — matches `## v1.8 — 2026-09-26`).
+      #    Strip CR first because CHANGELOG.md is committed with CRLF on Windows.
+      NOTES=$(tr -d '\r' < CHANGELOG.md | awk -v re="^## v${VERSION} " '
+        $0 ~ re { p=1; print; next }
+        /^## v[0-9]+/ { p=0 }
+        p
+      ')
+
+      if [ -z "$NOTES" ]; then
+        echo "ERROR: No '## v${VERSION}' section found in CHANGELOG.md."
+        echo ""
+        echo "Add a release entry before tagging, e.g.:"
+        echo ""
+        echo "    ## v${VERSION} — \$(date -u +%Y-%m-%d)"
+        echo ""
+        echo "    ### Highlights"
+        echo ""
+        echo "    - ..."
+        exit 1
+      fi
+
+      # 2. Warn (don't fail) if the entry has no date.
+      if ! printf '%s\n' "$NOTES" | head -1 | grep -qE '^## v[0-9].+— [0-9]{4}-[0-9]{2}-[0-9]{2}'; then
+        echo "WARNING: CHANGELOG entry for v${VERSION} has no '— YYYY-MM-DD' date suffix."
+        echo "Header was: $(printf '%s\n' "$NOTES" | head -1)"
+      fi
+
+      # 3. Sanity: warn if there's already a release for this tag (re-runs).
+      echo "Release notes preview for v${VERSION}:"
+      echo "----------------------------------------"
+      printf '%s\n' "$NOTES"
+      echo "----------------------------------------"
+
+      # 4. Persist notes + tarball metadata for the release-cli job.
+      printf '%s\n' "$NOTES" > release_notes.md
+      TARBALL=$(ls -1 agent-skills-*.tar.gz | head -1)
+      TARBALL_URL="${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/${TARBALL}"
+      echo "Source tarball: ${TARBALL_URL}"
+
+      # 5. Build the assets-link JSON (one source archive).
+      cat > assets.json <<EOF
+      [
+        {
+          "name": "Source tarball (${TARBALL})",
+          "url": "${TARBALL_URL}",
+          "link_type": "package"
+        }
+      ]
+      EOF
+  artifacts:
+    paths:
+      - release_notes.md
+      - assets.json
+      - agent-skills-*.tar.gz
+    expire_in: 1 month
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+(\.[0-9]+)?$/
+
+release:publish:
+  stage: release
+  image: $RELEASE_CLI_IMAGE
+  needs:
+    - job: package:source
+      artifacts: true
+    - job: release:create
+      artifacts: true
+  script:
+    - |
+      set -eu
+      VERSION="${CI_COMMIT_TAG#v}"
+
+      # release-cli reads --description from a file via @file.
+      release-cli create \
+        --name "v${VERSION}" \
+        --tag-name "${CI_COMMIT_TAG}" \
+        --ref "${CI_COMMIT_SHA}" \
+        --description "@release_notes.md" \
+        --assets-link "$(cat assets.json | tr -d '\n')" \
+        --milestone "v${VERSION}"
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+(\.[0-9]+)?$/
+
+# -----------------------------------------------------------------------------
+# Manual gate: preview the release notes that the next tag would produce.
+# Triggered from the pipeline view ("Run") to dry-run before tagging.
+# -----------------------------------------------------------------------------
+
+release:dry-run:
+  stage: release
+  image: alpine:3.20
+  cache: []
+  before_script:
+    - apk add --no-cache bash
+  script:
+    - |
+      set -e
+      # The tag we would use = the latest "## vX.Y" header in CHANGELOG.
+      NEXT=$(grep -oE '^## v[0-9]+\.[0-9]+(\.[0-9]+)?' CHANGELOG.md | head -1 | sed 's/^## //')
+      if [ -z "$NEXT" ]; then
+        echo "No '## vX.Y' header found in CHANGELOG.md."
+        exit 1
+      fi
+      echo "Would release as: ${NEXT}"
+      echo "Existing tags: $(git tag -l 'v*' | sort -V | tail -5 | tr '\n' ' ')"
+      echo ""
+      echo "CHANGELOG section for ${NEXT}:"
+      echo "----------------------------------------"
+      tr -d '\r' < CHANGELOG.md | awk -v re="^## ${NEXT} " '
+        $0 ~ re { p=1; print; next }
+        /^## v[0-9]+/ { p=0 }
+        p
+      ' CHANGELOG.md
+      echo "----------------------------------------"
+      echo ""
+      echo "To cut this release:"
+      echo "  git tag ${NEXT} && git push --tags"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: true

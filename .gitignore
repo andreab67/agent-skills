@@ -3,3 +3,6 @@ node_modules/
 *.log
 .idea/
 .vscode/
+
+# VarAlign local store (machine-local variable-tracking data)
+.varmem/*

@@ -2,7 +2,8 @@
 # Run only in a disposable container; never executes remediation on the host.
 set -euo pipefail
 [ -f /.dockerenv ] || { echo "Container required" >&2; exit 1; }
-script=${1:-/repo/ubuntu24-stig/remediate-mac2-sensitive.sh}
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+script=${1:-$repo_dir/ubuntu24-stig/remediate-mac2-sensitive.sh}
 bash -n "$script"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

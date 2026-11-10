@@ -4,10 +4,71 @@
 # Run as root. Take an AMI snapshot first.
 set -euo pipefail
 
-LOGDIR=/var/backups/stig-$(date +%Y%m%dT%H%M%SZ)
-mkdir -p "$LOGDIR"
+# Preview is deliberately handled before any filesystem or privileged operation.
+APPLY=0
+YES=0
+OOB=${STIG_OOB_ACK:-0}
+ALLOW_OS=0
+UFW_ALLOW_PORTS=${STIG_UFW_ALLOW_PORTS:-auto}
+usage() {
+  echo "Usage: $0 [--apply] [--yes] [--oob-access-confirmed] [--allow-unsupported-os] [--ufw-allow-ports '22 443']"
+}
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply) APPLY=1 ;;
+    --yes) YES=1 ;;
+    --oob-access-confirmed) OOB=1 ;;
+    --allow-unsupported-os) ALLOW_OS=1 ;;
+    --ufw-allow-ports)
+      [ "$#" -ge 2 ] || { usage >&2; exit 2; }
+      UFW_ALLOW_PORTS=$2; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+  shift
+done
+if [ "$UFW_ALLOW_PORTS" != auto ]; then
+  [ -n "$UFW_ALLOW_PORTS" ] || { echo "Empty UFW allow-list" >&2; exit 2; }
+  for port in $UFW_ALLOW_PORTS; do
+    if ! [[ "$port" =~ ^[0-9]{1,5}$ ]] || ! ((10#$port >= 1 && 10#$port <= 65535)); then
+      echo "UFW ports must be decimal integers 1..65535" >&2; exit 2
+    fi
+  done
+fi
+if [ "$APPLY" -eq 0 ]; then
+  echo "DRY RUN: no changes will be made. Applying requires --apply and confirmation."
+  echo "Would preflight root, Ubuntu 24.04, and acknowledged out-of-band recovery access."
+  echo "Would create a private, verified /etc backup under /var/backups/stig-UTC-* (directory 700, archive 600)."
+  echo "Would install audit/PAM/SSSD/AIDE/chrony/OpenSCAP/UFW packages; configure audit rules and GRUB."
+  echo "Would harden SSH client/server (validate sshd -t before restart), login banner, PAM and password aging."
+  echo "Would configure SSSD, session limits/timeouts, sysctl and UFW (allowed TCP ports: $UFW_ALLOW_PORTS)."
+  echo "Would initialize AIDE and its cron, disable Ctrl-Alt-Delete/USB storage, configure APT and file permissions."
+  echo "Would lock root login, remove PAM nullok, set umask and restrict cron. Review the script and snapshot first."
+  exit 0
+fi
+[ "$(id -u)" -eq 0 ] || { echo "Apply requires root" >&2; exit 1; }
+# Read the local OS metadata without executing it as shell code.
+OS_ID=$(sed -n 's/^ID=//p' /etc/os-release | tr -d '\"')
+OS_VERSION=$(sed -n 's/^VERSION_ID=//p' /etc/os-release | tr -d '\"')
+if [ "$ALLOW_OS" -ne 1 ] && { [ "$OS_ID" != ubuntu ] || [ "$OS_VERSION" != 24.04 ]; }; then
+  echo "Apply requires Ubuntu 24.04; explicit override: --allow-unsupported-os" >&2
+  exit 1
+fi
+[ "$OOB" = 1 ] || { echo "Confirm tested console/SSM access with --oob-access-confirmed or STIG_OOB_ACK=1" >&2; exit 1; }
+if [ "$YES" -ne 1 ]; then
+  [ -t 0 ] || { echo "Interactive confirmation required, or use --yes" >&2; exit 1; }
+  read -r -p "Type APPLY STIG after taking a snapshot: " answer
+  [ "$answer" = 'APPLY STIG' ] || { echo "Cancelled" >&2; exit 1; }
+fi
+command -v sshd >/dev/null || { echo "sshd is required" >&2; exit 1; }
+sshd -t
+umask 077
+LOGDIR=$(mktemp -d "/var/backups/stig-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+chmod 700 "$LOGDIR"
 echo "[*] Backing up /etc to $LOGDIR/etc.tgz"
-tar czf "$LOGDIR/etc.tgz" /etc 2>/dev/null || true
+tar czf "$LOGDIR/etc.tgz" -C / etc
+chmod 600 "$LOGDIR/etc.tgz"
+tar -tzf "$LOGDIR/etc.tgz" > /dev/null
 
 log() { echo "[STIG] $*"; }
 stig_ok()   { echo "  ✓ $*"; }
@@ -213,6 +274,14 @@ Host *
     MACs hmac-sha2-256,hmac-sha2-512,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com
 SSHCEOF
 
+if ! sshd -t; then
+  echo "SSH validation failed; restoring SSH configuration from verified backup" >&2
+  # Remove only our newly added drop-ins (they may not exist in the backup).
+  rm -f "$SSHD_STIG" "$SSH_STIG"
+  tar xzf "$LOGDIR/etc.tgz" -C / etc/ssh
+  sshd -t || echo "Restored SSH configuration also fails validation; use out-of-band access" >&2
+  exit 1
+fi
 systemctl restart sshd
 stig_ok "SSH hardened"
 
@@ -382,6 +451,9 @@ SSH_PORTS=$( { sshd -T 2>/dev/null | awk '$1=="port"{print $2} $1=="listenaddres
                systemctl show -p Listen --value ssh.socket 2>/dev/null | grep -oE ':[0-9]+ \(Stream\)' | tr -dc '0-9\n'
              } | sort -un || true)
 [ -n "$SSH_PORTS" ] || SSH_PORTS=22
+if [ "$UFW_ALLOW_PORTS" != auto ]; then
+  SSH_PORTS=$UFW_ALLOW_PORTS
+fi
 for p in $SSH_PORTS; do
   ufw allow "${p}/tcp" > /dev/null   # idempotent: ufw skips existing rules
   stig_ok "UFW: SSH port ${p}/tcp allowed"
@@ -443,9 +515,9 @@ find /etc/audit/ -type f \( -name "*.rules" -o -name "*.conf" \) \
   -exec chmod 640 {} \; -exec chown root:root {} \; 2>/dev/null || true
 
 # Audit tools
-find /sbin /usr/sbin -name "audit*" -o -name "auditctl" -o -name "ausearch" \
-     -o -name "aureport" -o -name "aulast" -o -name "autrace" 2>/dev/null | \
-  xargs -I{} sh -c 'chown root:root "{}" && chmod 0755 "{}"' 2>/dev/null || true
+find /sbin /usr/sbin \( -name "audit*" -o -name "auditctl" -o -name "ausearch" \
+     -o -name "aureport" -o -name "aulast" -o -name "autrace" \) \
+  -exec chown root:root {} + -exec chmod 0755 {} + 2>/dev/null || true
 
 # journalctl (SV-270758)
 chmod 0750 /usr/bin/journalctl 2>/dev/null || true

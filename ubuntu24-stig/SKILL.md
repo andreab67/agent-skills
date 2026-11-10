@@ -90,14 +90,27 @@ echo "Report: $OUTDIR/report.html"
 ## Step 5 — Remediation script
 
 See `remediate-mac2-sensitive.sh` in this skill directory.  
-Run as root on a **snapshot/AMI first** — this changes system configuration.
+The default invocation is a dry run. Apply only as root on a **snapshot/AMI first** — this changes system configuration.
 
 ```bash
 chmod +x remediate-mac2-sensitive.sh
-sudo ./remediate-mac2-sensitive.sh 2>&1 | tee /var/log/stig-remediation.log
+# Preview: no writes, package installs, backup or service changes.
+./remediate-mac2-sensitive.sh
+# After a snapshot and tested console/SSM recovery access:
+sudo ./remediate-mac2-sensitive.sh --apply --oob-access-confirmed
+# Automation may use --yes instead of the typed APPLY STIG confirmation.
+# Optional TCP allow-list (default auto preserves discovered SSH listener ports):
+sudo ./remediate-mac2-sensitive.sh --apply --yes --oob-access-confirmed --ufw-allow-ports '22 443'
 ```
 
 ---
+
+Apply checks root, Ubuntu 24.04 and acknowledged recovery access before writes.
+`--allow-unsupported-os` explicitly overrides the OS check. `STIG_OOB_ACK=1`
+is equivalent to `--oob-access-confirmed`; `STIG_UFW_ALLOW_PORTS` sets the TCP
+allow-list (`auto` discovers SSH listeners). Backups use UTC names, directory
+mode 700 and archive mode 600; tar creation/list verification must succeed.
+SSH configuration is validated before restart and restored if validation fails.
 
 ## AWS EC2 skip list
 

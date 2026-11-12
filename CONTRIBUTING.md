@@ -93,3 +93,11 @@ Behavioral changes (changing what the skill recommends, removing a section, expa
 ## License
 
 By contributing you agree your contribution is licensed under [BSD 3-Clause](./LICENSE).
+
+
+## Release milestone and source archive
+
+Tagged releases link to the repository archive for the tag. The packaged build
+artifact remains available for its configured retention period. Releases do not
+require a milestone by default; set the CI variable `RELEASE_MILESTONE` only
+to the name of an existing project milestone when one should be attached.

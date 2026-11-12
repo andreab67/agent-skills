@@ -9,9 +9,11 @@ APPLY=0
 YES=0
 OOB=${STIG_OOB_ACK:-0}
 ALLOW_OS=0
+AIDE_ACK=0
+JOURNAL_ACK=0
 UFW_ALLOW_PORTS=${STIG_UFW_ALLOW_PORTS:-auto}
 usage() {
-  echo "Usage: $0 [--apply] [--yes] [--oob-access-confirmed] [--allow-unsupported-os] [--ufw-allow-ports '22 443']"
+  echo "Usage: $0 [--apply] [--yes] [--oob-access-confirmed] [--allow-unsupported-os] [--aide-baseline-confirmed] [--journalctl-readers-confirmed] [--ufw-allow-ports '22 443']"
 }
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -19,6 +21,8 @@ while [ "$#" -gt 0 ]; do
     --yes) YES=1 ;;
     --oob-access-confirmed) OOB=1 ;;
     --allow-unsupported-os) ALLOW_OS=1 ;;
+    --aide-baseline-confirmed) AIDE_ACK=1 ;;
+    --journalctl-readers-confirmed) JOURNAL_ACK=1 ;;
     --ufw-allow-ports)
       [ "$#" -ge 2 ] || { usage >&2; exit 2; }
       UFW_ALLOW_PORTS=$2; shift ;;
@@ -42,7 +46,8 @@ if [ "$APPLY" -eq 0 ]; then
   echo "Would install audit/PAM/SSSD/AIDE/chrony/OpenSCAP/UFW packages; configure audit rules and GRUB."
   echo "Would harden SSH client/server (validate sshd -t before restart), login banner, PAM and password aging."
   echo "Would configure SSSD, session limits/timeouts, sysctl and UFW (allowed TCP ports: $UFW_ALLOW_PORTS)."
-  echo "Would initialize AIDE and its cron, disable Ctrl-Alt-Delete/USB storage, configure APT and file permissions."
+  echo "Would require a trusted existing AIDE baseline and verified journalctl readers before apply."
+  echo "Would configure AIDE cron, disable Ctrl-Alt-Delete/USB storage, configure APT and file permissions."
   echo "Would lock root login, remove PAM nullok, set umask and restrict cron. Review the script and snapshot first."
   exit 0
 fi
@@ -59,6 +64,28 @@ if [ "$YES" -ne 1 ]; then
   [ -t 0 ] || { echo "Interactive confirmation required, or use --yes" >&2; exit 1; }
   read -r -p "Type APPLY STIG after taking a snapshot: " answer
   [ "$answer" = 'APPLY STIG' ] || { echo "Cancelled" >&2; exit 1; }
+fi
+if [ "$AIDE_ACK" -ne 1 ] || [ ! -f /var/lib/aide/aide.db ]; then
+  echo "Apply requires an existing trusted AIDE baseline and --aide-baseline-confirmed" >&2; exit 1
+fi
+[ "$JOURNAL_ACK" -eq 1 ] || {
+  echo "Confirm journalctl non-root readers are accounted for with --journalctl-readers-confirmed" >&2; exit 1;
+}
+check_audit_state() {
+  if ! AUDIT_STATUS=$(auditctl -s); then
+    echo "ERROR: cannot determine audit state" >&2; exit 1
+  fi
+  if printf '%s\n' "$AUDIT_STATUS" | grep -qE '^enabled[[:space:]]+2([[:space:]]|$)'; then
+    echo "ERROR: audit is immutable; reboot and verify audit state before applying new rules" >&2; exit 1
+  fi
+  if ! printf '%s\n' "$AUDIT_STATUS" | grep -qE '^enabled[[:space:]]+[01]([[:space:]]|$)'; then
+    echo "ERROR: unrecognized audit state" >&2; exit 1
+  fi
+}
+# Check existing immutable state before backup or package changes if auditctl
+# is already installed. Check again after package installation and startup.
+if command -v auditctl >/dev/null; then
+  check_audit_state
 fi
 command -v sshd >/dev/null || { echo "sshd is required" >&2; exit 1; }
 sshd -t
@@ -101,22 +128,52 @@ stig_ok "Packages installed"
 # 2. auditd — SV-270656, SV-270657, SV-270676
 # ---------------------------------------------------------------------------
 log "Configuring auditd..."
-systemctl enable --now auditd 2>/dev/null || true
+systemctl enable --now auditd || { echo "ERROR: auditd could not be enabled and started" >&2; exit 1; }
+check_audit_state
 
-# Startup audit (SV-270676): add audit=1 to kernel cmdline via GRUB
-if ! grep -q "audit=1" /etc/default/grub 2>/dev/null; then
-  sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="\([^"]*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 audit=1"/' /etc/default/grub
-  update-grub 2>/dev/null || true
-  stig_fix "audit=1 added to kernel cmdline (reboot required)"
+# Startup audit (SV-270676): edit only one simple, active GRUB assignment.
+# Refuse dynamic or ambiguous shell syntax rather than executing this file.
+GRUB_FILE=/etc/default/grub
+[ -r "$GRUB_FILE" ] || { echo "ERROR: cannot read GRUB configuration" >&2; exit 1; }
+GRUB_COUNT=$(grep -cE '^[[:space:]]*GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_FILE" || true)
+[ "$GRUB_COUNT" -eq 1 ] || { echo "ERROR: expected one GRUB_CMDLINE_LINUX_DEFAULT assignment" >&2; exit 1; }
+GRUB_LINE=$(grep -E '^[[:space:]]*GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_FILE")
+if [[ ! "$GRUB_LINE" =~ ^[[:space:]]*GRUB_CMDLINE_LINUX_DEFAULT=\"([-a-zA-Z0-9_./:=,+[:space:]]*)\"[[:space:]]*$ ]]; then
+  echo "ERROR: unsupported GRUB assignment; review manually" >&2; exit 1
+fi
+GRUB_VALUE=${BASH_REMATCH[1]}
+read -r -a GRUB_TOKENS <<< "$GRUB_VALUE"
+GRUB_ARGS=""
+AUDIT_TOKENS=0
+AUDIT_IS_ONE=0
+for token in "${GRUB_TOKENS[@]}"; do
+  case "$token" in
+    audit=*)
+      AUDIT_TOKENS=$((AUDIT_TOKENS + 1))
+      [ "$token" != audit=1 ] || AUDIT_IS_ONE=1 ;;
+    *) GRUB_ARGS="${GRUB_ARGS:+$GRUB_ARGS }$token" ;;
+  esac
+done
+if [ "$AUDIT_TOKENS" -eq 1 ] && [ "$AUDIT_IS_ONE" -eq 1 ]; then
+  stig_ok "audit=1 already configured in GRUB; verify running state"
 else
-  stig_ok "audit=1 already in kernel cmdline"
+  GRUB_UPDATED="GRUB_CMDLINE_LINUX_DEFAULT=\"${GRUB_ARGS:+$GRUB_ARGS }audit=1\""
+  sed -i -E "s|^[[:space:]]*GRUB_CMDLINE_LINUX_DEFAULT=.*$|$GRUB_UPDATED|" "$GRUB_FILE"
+  grep -Fxq "$GRUB_UPDATED" "$GRUB_FILE" || { echo "ERROR: GRUB update was not applied" >&2; exit 1; }
+  update-grub
+  stig_fix "audit=1 configured in GRUB (reboot and verify running state)"
 fi
 
 # auditd.conf settings
 AUDITD_CONF=/etc/audit/auditd.conf
-sed -i 's/^log_format.*/log_format = ENRICHED/'    "$AUDITD_CONF" 2>/dev/null || true
-sed -i 's/^space_left_action.*/space_left_action = email/' "$AUDITD_CONF" 2>/dev/null || true
-sed -i 's/^action_mail_acct.*/action_mail_acct = root/'   "$AUDITD_CONF" 2>/dev/null || true
+for setting in log_format space_left_action action_mail_acct; do
+  if ! grep -qE "^\s*${setting}\s*=" "$AUDITD_CONF"; then
+    echo "ERROR: auditd.conf is missing $setting; review the configuration" >&2; exit 1
+  fi
+done
+sed -i 's/^[[:space:]]*log_format.*/log_format = ENRICHED/'    "$AUDITD_CONF"
+sed -i 's/^[[:space:]]*space_left_action.*/space_left_action = email/' "$AUDITD_CONF"
+sed -i 's/^[[:space:]]*action_mail_acct.*/action_mail_acct = root/'   "$AUDITD_CONF"
 stig_ok "auditd.conf configured"
 
 # ---------------------------------------------------------------------------
@@ -240,7 +297,10 @@ AUDITEOF
 
 chmod 640 "$RULES"
 chown root:root "$RULES"
-augenrules --load 2>/dev/null || auditctl -R "$RULES" 2>/dev/null || true
+if ! augenrules --load && ! auditctl -R "$RULES"; then
+  echo "ERROR: audit rules could not be loaded; inspect audit state and reboot if immutable" >&2
+  exit 1
+fi
 stig_ok "Audit rules loaded"
 
 # ---------------------------------------------------------------------------
@@ -274,14 +334,42 @@ Host *
     MACs hmac-sha2-256,hmac-sha2-512,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com
 SSHCEOF
 
-if ! sshd -t; then
-  echo "SSH validation failed; restoring SSH configuration from verified backup" >&2
-  # Remove only our newly added drop-ins (they may not exist in the backup).
+restore_ssh() {
+  echo "Restoring SSH configuration from verified backup" >&2
   rm -f "$SSHD_STIG" "$SSH_STIG"
   tar xzf "$LOGDIR/etc.tgz" -C / etc/ssh
   sshd -t || echo "Restored SSH configuration also fails validation; use out-of-band access" >&2
+}
+if ! sshd -t; then
+  echo "SSH validation failed" >&2
+  restore_ssh
   exit 1
 fi
+if ! SSH_EFFECTIVE=$(sshd -T); then
+  echo "Could not obtain effective SSH configuration" >&2
+  restore_ssh
+  exit 1
+fi
+while IFS= read -r expected; do
+  if ! printf '%s\n' "$SSH_EFFECTIVE" | grep -Fqx "$expected"; then
+    echo "ERROR: effective SSH configuration does not match: $expected" >&2
+    restore_ssh
+    exit 1
+  fi
+done <<'SSHEXPECT'
+ciphers aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com
+macs hmac-sha2-256,hmac-sha2-512,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com
+kexalgorithms ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256
+x11forwarding no
+x11uselocalhost yes
+permitemptypasswords no
+permituserenvironment no
+printlastlog yes
+clientaliveinterval 600
+clientalivecountmax 0
+banner /etc/issue.net
+allowagentforwarding no
+SSHEXPECT
 systemctl restart sshd
 stig_ok "SSH hardened"
 
@@ -447,10 +535,25 @@ log "Enabling UFW firewall..."
 # which also covers ports set via `ListenAddress host:port` (a bare `port` line
 # would miss those). On socket-activated sshd (ssh.socket, default on noble) a
 # ListenStream= drop-in bypasses sshd_config, so add ssh.socket's ports too.
-SSH_PORTS=$( { sshd -T 2>/dev/null | awk '$1=="port"{print $2} $1=="listenaddress"{n=split($2,a,":"); print a[n]}'
-               systemctl show -p Listen --value ssh.socket 2>/dev/null | grep -oE ':[0-9]+ \(Stream\)' | tr -dc '0-9\n'
-             } | sort -un || true)
-[ -n "$SSH_PORTS" ] || SSH_PORTS=22
+# Use the successfully validated effective configuration, never a guessed port.
+SSH_PORTS=$(printf '%s\n' "$SSH_EFFECTIVE" | awk '$1=="port"{print $2} $1=="listenaddress"{n=split($2,a,":"); print a[n]}' | sort -un)
+# A failed or ambiguous systemd query must never silently omit a listener.
+if ! SOCKET_LOAD=$(systemctl show -p LoadState --value ssh.socket); then
+  echo "ERROR: cannot determine ssh.socket state; refusing to enable UFW" >&2; exit 1
+fi
+case "$SOCKET_LOAD" in
+  loaded)
+    if ! SOCKET_LISTEN=$(systemctl show -p Listen --value ssh.socket); then
+      echo "ERROR: cannot inspect ssh.socket listeners; refusing to enable UFW" >&2; exit 1
+    fi
+    SOCKET_PORTS=$(printf '%s\n' "$SOCKET_LISTEN" | grep -oE ':[0-9]+ \(Stream\)' | tr -dc '0-9\n' || true)
+    [ -n "$SOCKET_PORTS" ] || { echo "ERROR: no TCP ssh.socket listener found; refusing to enable UFW" >&2; exit 1; }
+    ;;
+  not-found) SOCKET_PORTS="" ;;
+  *) echo "ERROR: unknown ssh.socket state '$SOCKET_LOAD'; refusing to enable UFW" >&2; exit 1 ;;
+esac
+SSH_PORTS=$(printf '%s\n%s\n' "$SSH_PORTS" "$SOCKET_PORTS" | sed '/^$/d' | sort -un)
+[ -n "$SSH_PORTS" ] || { echo "ERROR: no effective SSH port found" >&2; exit 1; }
 if [ "$UFW_ALLOW_PORTS" != auto ]; then
   SSH_PORTS=$UFW_ALLOW_PORTS
 fi
@@ -465,14 +568,8 @@ stig_ok "UFW enabled"
 # ---------------------------------------------------------------------------
 # 10. AIDE — SV-270649, SV-270652
 # ---------------------------------------------------------------------------
-log "Initialising AIDE file integrity database..."
-if [ ! -f /var/lib/aide/aide.db ]; then
-  aideinit 2>/dev/null || aide --init 2>/dev/null || true
-  [ -f /var/lib/aide/aide.db.new ] && mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db
-  stig_ok "AIDE database initialised"
-else
-  stig_ok "AIDE database already exists"
-fi
+log "Using operator-confirmed AIDE baseline..."
+stig_ok "Existing AIDE baseline retained"
 
 # Daily AIDE check with email alert
 cat > /etc/cron.d/aide-stig << 'AIDEEOF'
@@ -484,7 +581,7 @@ stig_ok "AIDE daily cron configured"
 # 11. DISABLE CTRL-ALT-DELETE — SV-270712
 # ---------------------------------------------------------------------------
 log "Disabling Ctrl-Alt-Delete..."
-systemctl mask ctrl-alt-del.target 2>/dev/null || true
+systemctl mask ctrl-alt-del.target
 systemctl daemon-reload
 stig_ok "Ctrl-Alt-Delete disabled"
 
@@ -512,30 +609,30 @@ stig_ok "APT autoremove configured"
 log "Fixing audit config and tool permissions..."
 # Audit config files
 find /etc/audit/ -type f \( -name "*.rules" -o -name "*.conf" \) \
-  -exec chmod 640 {} \; -exec chown root:root {} \; 2>/dev/null || true
+  -exec chmod 640 {} + -exec chown root:root {} +
 
 # Audit tools
 find /sbin /usr/sbin \( -name "audit*" -o -name "auditctl" -o -name "ausearch" \
      -o -name "aureport" -o -name "aulast" -o -name "autrace" \) \
-  -exec chown root:root {} + -exec chmod 0755 {} + 2>/dev/null || true
+  -exec chown root:root {} + -exec chmod 0755 {} +
 
 # journalctl (SV-270758)
-chmod 0750 /usr/bin/journalctl 2>/dev/null || true
+chmod 0750 /usr/bin/journalctl
 stig_ok "Audit config: 640 root:root; journalctl: 0750"
 
 # ---------------------------------------------------------------------------
 # 15. DIRECT ROOT LOGIN — SV-270724
 # ---------------------------------------------------------------------------
 log "Locking direct root login..."
-passwd -l root > /dev/null 2>&1 || true
+passwd -l root
 stig_ok "root account locked (sudo still works)"
 
 # ---------------------------------------------------------------------------
 # 16. PAM NULL PASSWORDS — SV-270714
 # ---------------------------------------------------------------------------
 log "Removing nullok from PAM..."
-sed -i 's/ nullok//g' /etc/pam.d/common-auth 2>/dev/null || true
-sed -i 's/ nullok//g' /etc/pam.d/common-password 2>/dev/null || true
+sed -i 's/ nullok//g' /etc/pam.d/common-auth
+sed -i 's/ nullok//g' /etc/pam.d/common-password
 stig_ok "nullok removed from PAM"
 
 # ---------------------------------------------------------------------------
@@ -555,7 +652,7 @@ stig_ok "UMASK: 027"
 log "Enabling remote access monitoring in rsyslog..."
 grep -q "auth,authpriv" /etc/rsyslog.conf || \
   echo 'auth,authpriv.*  /var/log/auth.log' >> /etc/rsyslog.conf
-systemctl restart rsyslog 2>/dev/null || true
+systemctl restart rsyslog
 stig_ok "auth log: /var/log/auth.log"
 
 # ---------------------------------------------------------------------------
@@ -574,9 +671,9 @@ stig_skip "SV-270744: FIPS mode (requires Ubuntu Pro subscription + reboot)"
 # ---------------------------------------------------------------------------
 echo ""
 echo "════════════════════════════════════════════════════"
-echo "  STIG remediation complete"
+echo "  Remediation commands completed; verification remains required"
 echo "  Backup: $LOGDIR"
-echo "  REBOOT REQUIRED for: audit=1 kernel param, AIDE"
+echo "  Reboot may be required for kernel parameter changes; verify the running state after reboot."
 echo "════════════════════════════════════════════════════"
 echo ""
 echo "Run post-scan to verify:"

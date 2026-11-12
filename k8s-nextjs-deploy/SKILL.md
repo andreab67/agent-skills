@@ -31,6 +31,8 @@ Do NOT use for:
 
 ## Deployment manifest
 
+The image tag below is a CI template, not a literal Kubernetes expansion. In the deployment job, require a nonempty commit SHA and render only that variable (for example, `test -n "$CI_COMMIT_SHA" && envsubst '${CI_COMMIT_SHA}' < deployment.yaml > deployment.rendered.yaml`). Review the rendered manifest before use.
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -51,7 +53,7 @@ spec:
         - name: harbor-pull-secret
       containers:
         - name: web
-          image: harbor.example.com/project/app:latest
+          image: harbor.example.com/project/app:${CI_COMMIT_SHA}
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false

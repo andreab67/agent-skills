@@ -61,6 +61,8 @@ lint:frontmatter:
           echo "FAIL: $f name '$name' contains reserved word (anthropic|claude)"; fail=1
         fi
       done < <(find . -path ./.git -prune -o -path '*/SKILL.md' -print0)
+      bash scripts/check-skill-names.sh
+      bash scripts/test-check-skill-names.sh
       exit $fail
   rules:
     - if: $CI_COMMIT_TAG
@@ -119,10 +121,15 @@ test:stig-safety:
   image: ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
   cache: []
   before_script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends bash shellcheck ca-certificates
+    - apt-get update -qq && apt-get install -y --no-install-recommends bash shellcheck ca-certificates nodejs
   script:
-    - shellcheck ubuntu24-stig/remediate-mac2-sensitive.sh scripts/check-secrets.sh scripts/test-stig-safety.sh scripts/test-secret-scanner.sh
+    - bash scripts/check-code.sh .
+    - bash scripts/test-check-code.sh
     - bash scripts/test-stig-safety.sh
+    - bash scripts/test-stig-network-and-grub.sh
+    - bash scripts/test-fetch-page.sh
+    - bash scripts/test-release-notes.sh
+    - bash scripts/test-ci-examples.sh
   rules:
     - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH == "main"
@@ -186,14 +193,8 @@ release:create:
       set +o pipefail
       VERSION="${CI_COMMIT_TAG#v}"
 
-      # 1. Extract the CHANGELOG section for this exact version.
-      #    Pattern: `^## vX.Y[.Z] ` (with space — matches `## v1.8 — 2026-09-26`).
-      #    Strip CR first because CHANGELOG.md is committed with CRLF on Windows.
-      NOTES=$(tr -d '\r' < CHANGELOG.md | awk -v re="^## v${VERSION} " '
-        $0 ~ re { p=1; print; next }
-        /^## v[0-9]+/ { p=0 }
-        p
-      ')
+      # Extract the exact version section from normalized input.
+      NOTES=$(bash scripts/release-notes.sh "$VERSION" < CHANGELOG.md) || NOTES=""
 
       if [ -z "$NOTES" ]; then
         echo "ERROR: No '## v${VERSION}' section found in CHANGELOG.md."
@@ -225,10 +226,10 @@ release:create:
       # We know the tarball name from VERSION — no need to glob and risk
       # another `ls | head` SIGPIPE.
       TARBALL="agent-skills-${VERSION}.tar.gz"
-      TARBALL_URL="${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/raw/${TARBALL}"
+      TARBALL_URL="${CI_PROJECT_URL}/-/archive/${CI_COMMIT_TAG}/agent-skills-${CI_COMMIT_TAG}.tar.gz"
       echo "Source tarball: ${TARBALL_URL}"
 
-      # 5. Build the assets-link JSON (one source archive).
+      # 5. Link the durable GitLab repository archive for this tag.
       cat > assets.json <<EOF
       [
         {
@@ -260,14 +261,18 @@ release:publish:
       set -eu
       VERSION="${CI_COMMIT_TAG#v}"
 
+      # RELEASE_MILESTONE is optional and must name an existing project milestone.
+      set --
+      if [ -n "${RELEASE_MILESTONE:-}" ]; then
+        set -- --milestone "$RELEASE_MILESTONE"
+      fi
       # release-cli reads --description from a file via @file.
       release-cli create \
         --name "v${VERSION}" \
         --tag-name "${CI_COMMIT_TAG}" \
         --ref "${CI_COMMIT_SHA}" \
         --description "@release_notes.md" \
-        --assets-link "$(cat assets.json | tr -d '\n')" \
-        --milestone "v${VERSION}"
+        --assets-link "$(cat assets.json | tr -d '\n')" "$@"
   rules:
     - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+(\.[0-9]+)?$/
 
@@ -281,7 +286,7 @@ release:dry-run:
   image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
   cache: []
   before_script:
-    - apk add --no-cache bash
+    - apk add --no-cache bash git
   script:
     - |
       # Disable pipefail (see package:source for the SIGPIPE explanation).
@@ -300,11 +305,7 @@ release:dry-run:
       echo ""
       echo "CHANGELOG section for ${NEXT}:"
       echo "----------------------------------------"
-      tr -d '\r' < CHANGELOG.md | awk -v re="^## ${NEXT} " '
-        $0 ~ re { p=1; print; next }
-        /^## v[0-9]+/ { p=0 }
-        p
-      ' CHANGELOG.md
+      bash scripts/release-notes.sh "${NEXT#v}" < CHANGELOG.md
       echo "----------------------------------------"
       echo ""
       echo "To cut this release:"

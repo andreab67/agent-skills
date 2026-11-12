@@ -33,7 +33,7 @@ Each stage uses YAML anchors (`.app_build`, `.app_obfuscate`, `.kaniko_package`)
 ```yaml
 lint-web:
   stage: validate
-  image: node:24-alpine
+  image: node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
   cache:
     key: web-${CI_COMMIT_REF_SLUG}
     paths: [apps/web/node_modules/]
@@ -46,7 +46,7 @@ lint-web:
 
 test-web:
   stage: validate
-  image: node:24-alpine
+  image: node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
   cache:
     key: web-${CI_COMMIT_REF_SLUG}
     paths: [apps/web/node_modules/]
@@ -60,34 +60,36 @@ test-web:
       junit: apps/web/junit/results.xml
     expire_in: 7 days
     when: always
-  allow_failure: true
 ```
 
 ### Stage: security
 
-Uses Semgrep (secrets + SAST), gitleaks, and hadolint. Gitleaks requires a `.gitleaks.toml` for public-token allowlists:
+Uses Semgrep (secrets + SAST), gitleaks, and hadolint. Avoid broad allowlists: they can suppress real secrets. Only after confirming a token is public, scope an exception to its exact value and exact file. Replace the example below with the reviewed public value and path:
 
 ```toml
-# .gitleaks.toml — allowlist public tokens that are not secrets
-[allowlist]
-  description = "Public tokens that are not secrets"
-  paths = [
-    '''apps/.*/public/.*\.txt''',
-  ]
-  regexes = [
-    '''G-[A-Z0-9]{8,}''',          # Google Analytics Measurement IDs
-    '''[0-9a-f]{32}''',             # IndexNow verification keys
-  ]
+# .gitleaks.toml
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Reviewed public IndexNow token in its public file"
+condition = "AND"
+paths = ['''(^|/)apps/web/public/0123456789abcdef0123456789abcdef\.txt$''']
+regexTarget = "secret"
+regexes = ['''^0123456789abcdef0123456789abcdef$''']
 ```
 
 ```yaml
 gitleaks:
   stage: security
   image:
-    name: zricethezav/gitleaks:latest
+    name: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
     entrypoint: [""]
   script:
-    - gitleaks detect --source . --config .gitleaks.toml --report-format json --report-path gitleaks.json --exit-code 1
+    - gitleaks detect --redact --source . --config .gitleaks.toml --report-format json --report-path gitleaks.json --exit-code 1
 ```
 
 ### Stage: build
@@ -95,7 +97,7 @@ gitleaks:
 ```yaml
 .app_build:
   stage: build
-  image: node:24-alpine
+  image: node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
   script:
     - cd apps/${APP_NAME} && npm ci && npm run build
   artifacts:
@@ -116,7 +118,7 @@ Obfuscates Next.js standalone output with `javascript-obfuscator`. **Must exclud
 ```yaml
 .app_obfuscate:
   stage: obfuscate
-  image: node:24-alpine
+  image: node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
   script:
     - npm install -g javascript-obfuscator
     - |
@@ -158,7 +160,7 @@ Kaniko runs unprivileged — no DinD, no privileged pods:
 .kaniko_package:
   stage: package
   image:
-    name: gcr.io/kaniko-project/executor:debug
+    name: gcr.io/kaniko-project/executor:v1.24.0-debug@sha256:2562c4fe551399514277ffff7dcca9a3b1628c4ea38cb017d7286dc6ea52f4cd
     entrypoint: [""]
   before_script:
     - |
@@ -181,7 +183,7 @@ Kaniko runs unprivileged — no DinD, no privileged pods:
 Dockerfiles are minimal — they package pre-built artifacts, not build from source:
 
 ```dockerfile
-FROM node:22-alpine
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402
 RUN apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 WORKDIR /app
@@ -202,7 +204,7 @@ CMD ["node", "server.js"]
 ```yaml
 indexnow:
   stage: notify
-  image: alpine:latest
+  image: alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
   needs: [package-web, package-buy, package-kb]
   before_script:
     - apk add --no-cache curl
@@ -230,7 +232,7 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 4. **Extend the obfuscate stage** — add `obfuscate-<name>` extending `.app_obfuscate` with the same `APP_NAME` and `needs: [build-<name>]`. *Success*: the resulting image boots without `ChunkLoadError` (see the Turbopack/externals exclusion above).
 5. **Extend the package stage** — add `package-<name>` extending `.kaniko_package` with `variables: { APP_NAME: <name> }` and `needs: [obfuscate-<name>]` (the template's `script:` builds `apps/<name>/Dockerfile`; `HARBOR_PROJECT` must be set as a CI/CD variable alongside `HARBOR_REGISTRY`). *Success*: the image lands in Harbor as `$HARBOR_REGISTRY/$HARBOR_PROJECT/<name>:$CI_COMMIT_SHA`.
 6. **Add the new job to `notify`'s `needs`** — append `package-<name>` to the `indexnow` job's `needs: [...]` list. *Success*: the pipeline DAG shows `notify` gated on all package jobs, including the new one.
-7. **Add the IndexNow key file** (if the app serves its own domain/subdomain) — `echo -n "YOUR_KEY" > apps/<name>/public/YOUR_KEY.txt`, and allowlist the pattern in `.gitleaks.toml` if not already covered. *Success*: `gitleaks detect` passes and the key file is served under the app's public path.
+7. **Add the IndexNow key file** (if the app serves its own domain/subdomain) — `echo -n "YOUR_KEY" > apps/<name>/public/YOUR_KEY.txt`, and add an exception only for that exact public value and file if a detection requires one. *Success*: `gitleaks detect` passes and the key file is served under the app's public path.
 
 ## Common failure patterns
 
@@ -240,7 +242,7 @@ echo -n "YOUR_KEY" > apps/web/public/YOUR_KEY.txt
 | `.next/standalone not found` in Docker build | `.dockerignore` excludes `.next` | Remove `.next` from `.dockerignore` |
 | `ChunkLoadError: _0x… is not a function` | Obfuscator mangled Turbopack runtime chunks | Exclude `'*\[turbopack\]*'` and `'*\[externals\]*'` from find (escaped brackets) |
 | `npm ci` fails: no lockfile | New app scaffolded but `npm install` never run | Run `npm install` locally first, commit `package-lock.json` |
-| gitleaks blocks on IndexNow key | 32-char hex looks like generic API key | Add regex allowlist to `.gitleaks.toml` |
+| gitleaks blocks on IndexNow key | 32-char hex looks like generic API key | Confirm the value is public; scope an exception to its exact value and file |
 
 ## Example prompts
 

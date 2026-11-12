@@ -97,20 +97,22 @@ chmod +x remediate-mac2-sensitive.sh
 # Preview: no writes, package installs, backup or service changes.
 ./remediate-mac2-sensitive.sh
 # After a snapshot and tested console/SSM recovery access:
-sudo ./remediate-mac2-sensitive.sh --apply --oob-access-confirmed
+sudo ./remediate-mac2-sensitive.sh --apply --oob-access-confirmed --aide-baseline-confirmed --journalctl-readers-confirmed
 # Automation may use --yes instead of the typed APPLY STIG confirmation.
 # Optional TCP allow-list (default auto preserves discovered SSH listener ports):
-sudo ./remediate-mac2-sensitive.sh --apply --yes --oob-access-confirmed --ufw-allow-ports '22 443'
+sudo ./remediate-mac2-sensitive.sh --apply --yes --oob-access-confirmed --aide-baseline-confirmed --journalctl-readers-confirmed --ufw-allow-ports '22 443'
 ```
 
 ---
 
-Apply checks root, Ubuntu 24.04 and acknowledged recovery access before writes.
+Before applying, establish and verify a trusted AIDE baseline on the known-good, settled host at `/var/lib/aide/aide.db`; the script does not create or attest the baseline. Confirm the journalctl reader impact and arrange access for affected monitoring services. The two confirmation flags record these operator checks; neither flag proves them.
+
+Apply checks root, Ubuntu 24.04, the baseline and acknowledged recovery/reader access before writes. If audit rules are already immutable, apply stops and reports that a reboot and state verification are required. Failure after loading immutable rules can also require a reboot before changes can be retried.
 `--allow-unsupported-os` explicitly overrides the OS check. `STIG_OOB_ACK=1`
 is equivalent to `--oob-access-confirmed`; `STIG_UFW_ALLOW_PORTS` sets the TCP
 allow-list (`auto` discovers SSH listeners). Backups use UTC names, directory
 mode 700 and archive mode 600; tar creation/list verification must succeed.
-SSH configuration is validated before restart and restored if validation fails.
+SSH syntax and effective settings are validated before restart and restored if validation fails. A completion message reports commands completed, not STIG compliance; verify the running state and scan separately.
 
 ## AWS EC2 skip list
 
@@ -146,7 +148,7 @@ echo "0 5 * * * root /usr/bin/aide --check | mail -s 'AIDE report' root" > /etc/
 
 ### SSH FIPS 140-3 ciphers (SV-270667 to SV-270671)
 ```bash
-cat >> /etc/ssh/sshd_config.d/99-stig-fips.conf << 'EOF'
+cat > /etc/ssh/sshd_config.d/99-stig-fips.conf << 'EOF'
 Ciphers aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com
 MACs hmac-sha2-256,hmac-sha2-512,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com
 KexAlgorithms ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256
@@ -163,7 +165,7 @@ systemctl restart sshd
 
 ### SSH client FIPS (SV-270670, SV-270671)
 ```bash
-cat >> /etc/ssh/ssh_config.d/99-stig-fips.conf << 'EOF'
+cat > /etc/ssh/ssh_config.d/99-stig-fips.conf << 'EOF'
 Ciphers aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com
 MACs hmac-sha2-256,hmac-sha2-512,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com
 EOF
@@ -210,7 +212,7 @@ sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS   1/'  /etc/login.defs
 
 ### Concurrent sessions limit (SV-270677)
 ```bash
-echo "* hard maxlogins 10" >> /etc/security/limits.d/99-stig.conf
+echo "* hard maxlogins 10" > /etc/security/limits.d/99-stig.conf
 ```
 
 ### Session inactivity timeout (SV-270680)
@@ -235,7 +237,7 @@ echo "install usb-storage /bin/true" > /etc/modprobe.d/disable-usb-storage.conf
 
 ### Kernel sysctl hardening (SV-270749, SV-270753)
 ```bash
-cat >> /etc/sysctl.d/99-stig.conf << 'EOF'
+cat > /etc/sysctl.d/99-stig.conf << 'EOF'
 kernel.dmesg_restrict = 1
 net.ipv4.tcp_syncookies = 1
 EOF
@@ -243,17 +245,15 @@ sysctl --system
 ```
 
 ### UFW firewall (SV-270654, SV-270655)
-```bash
-# Every port sshd really listens on: sshd_config (port + ListenAddress host:port)
-# plus ssh.socket ListenStream= overrides, which bypass sshd_config on noble.
-SSH_PORTS=$( { sshd -T 2>/dev/null | awk '$1=="port"{print $2} $1=="listenaddress"{n=split($2,a,":"); print a[n]}'
-               systemctl show -p Listen --value ssh.socket 2>/dev/null | grep -oE ':[0-9]+ \(Stream\)' | tr -dc '0-9\n'
-             } | sort -un || true)
-for p in ${SSH_PORTS:-22}; do ufw allow "${p}/tcp"; done
-ufw --force enable
-ufw logging on
-```
-Allow SSH **before** `ufw --force enable`: Ubuntu's `DEFAULT_INPUT_POLICY` is `DROP`, so enabling UFW with no allow rule refuses every new SSH connection (your current session survives only via conntrack) and locks you out of the instance.
+
+Use the remediation script after reviewing its preflight and recovery-access
+requirements. Its automatic mode checks the effective SSH configuration and
+the `ssh.socket` state and listeners; an unknown state or failed listener query
+stops before UFW changes. When supplying `--ufw-allow-ports`, first verify that
+the list includes every port needed for recovery and SSH, including any
+socket-activated listener. The script adds allow rules before enabling UFW.
+Verify access and effective settings after the change; `sshd -T` without a
+connection context does not prove every `Match` case.
 
 ### APT autoremove (SV-270773)
 ```bash
@@ -268,6 +268,7 @@ chown root:root /etc/audit/audit.rules /etc/audit/auditd.conf 2>/dev/null || tru
 ```
 
 ### journalctl permissions (SV-270758)
+Review non-root monitoring readers and arrange their access before applying this mode.
 ```bash
 chmod 0750 /usr/bin/journalctl
 ```

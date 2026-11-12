@@ -18,8 +18,29 @@ SITE="$1"
 PAGE_ID="$2"
 OUT="${3:-page-${PAGE_ID}.json}"
 
+# Restrict the credentialed request to one Atlassian tenant and a numeric page.
+if [[ ! "$SITE" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]; then
+  echo "Invalid site subdomain" >&2
+  exit 1
+fi
+if [[ ! "$PAGE_ID" =~ ^[0-9]+$ ]]; then
+  echo "Invalid page ID" >&2
+  exit 1
+fi
+# Output is a plain filename in the current directory, never a path or option.
+if [[ ! "$OUT" =~ ^[a-zA-Z0-9_][a-zA-Z0-9._-]*$ || -L "$OUT" || -d "$OUT" ]]; then
+  echo "Invalid output filename" >&2
+  exit 1
+fi
+
 : "${CONFLUENCE_EMAIL:?Set CONFLUENCE_EMAIL to your Atlassian account email}"
 : "${CONFLUENCE_TOKEN:?Set CONFLUENCE_TOKEN to a personal API token}"
+
+if [[ "$CONFLUENCE_EMAIL" == *$'\n'* || "$CONFLUENCE_EMAIL" == *$'\r'* ||
+      "$CONFLUENCE_TOKEN" == *$'\n'* || "$CONFLUENCE_TOKEN" == *$'\r'* ]]; then
+  echo "Credentials must not contain line breaks" >&2
+  exit 1
+fi
 
 # Escape backslashes and double quotes so the value is safe inside a
 # double-quoted curl config entry (see `man curl` "-K, --config").
@@ -34,8 +55,14 @@ CURL_CONFIG=$(printf 'user = "%s:%s"\n' \
   "$(escape_for_curl_config "$CONFLUENCE_EMAIL")" \
   "$(escape_for_curl_config "$CONFLUENCE_TOKEN")")
 
-HTTP_STATUS=$(printf '%s\n' "$CURL_CONFIG" | curl -sS -K - -o "$OUT" -w "%{http_code}" \
+# Write beside the destination and rename only after curl completes. This also
+# avoids following a destination symlink swapped in after the initial check.
+TEMP_OUT=$(mktemp "./.fetch-page.XXXXXXXX")
+trap 'rm -f -- "$TEMP_OUT"' EXIT
+HTTP_STATUS=$(printf '%s\n' "$CURL_CONFIG" | curl -sS --proto =https --connect-timeout 10 --max-time 30 -K - -o "$TEMP_OUT" -w "%{http_code}" \
   "https://${SITE}.atlassian.net/wiki/api/v2/pages/${PAGE_ID}?body-format=storage")
+
+mv -fT -- "$TEMP_OUT" "$OUT"
 
 if [[ "$HTTP_STATUS" != "200" ]]; then
   echo "Fetch failed (HTTP $HTTP_STATUS). Response body written to $OUT — inspect it:" >&2

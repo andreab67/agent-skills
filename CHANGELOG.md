@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.9.1 — 2026-11-12
+
+- Harden Ubuntu 24.04 STIG remediation and network and GRUB safeguards, with expanded failure-path tests.
+- Tighten skill-name, script, secret-scan and CI example checks, and reject malformed release-note versions.
+- Harden Confluence page fetching and update Kubernetes, PostgreSQL and Next.js deployment guidance.
+- Pin validation images and link tagged GitLab releases to the durable repository source archive.
+- Fix release publishing to trust the Runner-provided GitLab CA and read the release-note file correctly.
+
+
 ## v1.9 — 2026-11-12
 
 - Harden Ubuntu 24.04 STIG remediation and its network and GRUB safeguards; expand failure-path tests.
